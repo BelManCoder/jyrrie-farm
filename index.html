@@ -138,7 +138,7 @@
 
   let lang = detectLang();
   let t = T[lang];
-  let entries = [], rates = { __default__: 200 }, isAdmin = false, editingId = null;
+  let entries = [], rates = { defaultRate: 200 }, isAdmin = false, editingId = null;
 
   function applyLang() {
     t = T[lang];
@@ -207,7 +207,7 @@
     setTimeout(() => el.classList.remove('show'), 3000);
   }
   function today() { return new Date().toISOString().split('T')[0]; }
-  function getRate(name) { return rates[name] ?? rates.__default__ ?? 200; }
+  function getRate(name) { return rates[name] ?? rates.defaultRate ?? 200; }
   function fmtDate(d) {
     const locale = lang==='ar'?'ar-MA':lang==='fr'?'fr-FR':'de-DE';
     return new Date(d+'T00:00:00').toLocaleDateString(locale,{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -316,7 +316,7 @@
 
   function renderRates() {
     const grid = document.getElementById('ratesGrid');
-    grid.innerHTML = Object.entries(rates).filter(([k])=>k!=='__default__').map(([name,val])=>`
+    grid.innerHTML = Object.entries(rates).filter(([k])=>k!=='defaultRate').map(([name,val])=>`
       <div class="rate-item">
         <span class="rate-name">${name}</span>
         <div class="rate-input-wrap">
@@ -328,7 +328,7 @@
       <div class="rate-item">
         <span class="rate-name" style="color:var(--text-muted)">${t.standard}</span>
         <div class="rate-input-wrap">
-          <input class="rate-input" type="number" value="${rates.__default__??200}" min="0" step="1" onchange="updateRate('__default__',this.value)">
+          <input class="rate-input" type="number" value="${rates.defaultRate??200}" min="0" step="1" onchange="updateRate('defaultRate',this.value)">
           <span class="rate-currency">${CURRENCY}</span>
         </div>
       </div>`;
@@ -338,7 +338,7 @@
     const sel = document.getElementById('f_name');
     const cur = sel.value;
     sel.innerHTML = `<option value="">${t.selectName}</option>`+
-      Object.keys(rates).filter(k=>k!=='__default__').map(n=>`<option value="${n}"${n===cur?' selected':''}>${n}</option>`).join('')+
+      Object.keys(rates).filter(k=>k!=='defaultRate').map(n=>`<option value="${n}"${n===cur?' selected':''}>${n}</option>`).join('')+
       `<option value="__other__">${t.otherName}</option>`;
   }
 
@@ -749,7 +749,7 @@
       <button id="btnModalCancel" class="btn btn-secondary" onclick="closeModal()" style="flex:1">Abbrechen</button>
       <button id="btnModalLogin" class="btn btn-primary" onclick="checkPin()" style="flex:1">Einloggen</button>
     </div>
-    <p id="pinHint" style="font-size:12px;color:#aaa;margin-top:12px;text-align:center">Standard-PIN: 1234</p>
+    <p id="pinHint" style="font-size:12px;color:#aaa;margin-top:12px;text-align:center">Standard-PIN: 0909</p>
   </div>
 </div>
 
