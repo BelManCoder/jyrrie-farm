@@ -19,12 +19,13 @@
   //    (aus Firebase Console → Projekteinstellungen → Web-App)
   // ============================================================
   const firebaseConfig = {
-    apiKey:            "DEIN_API_KEY",
-    authDomain:        "DEIN_PROJEKT.firebaseapp.com",
-    projectId:         "DEIN_PROJEKT_ID",
-    storageBucket:     "DEIN_PROJEKT.appspot.com",
-    messagingSenderId: "DEINE_SENDER_ID",
-    appId:             "DEINE_APP_ID"
+    apiKey:            "AIzaSyDX7aujTemVHBkMUztCCG0NQ03sb1t2HI8",
+    authDomain:        "jyrrie-farm.firebaseapp.com",
+    projectId:         "jyrrie-farm",
+    storageBucket:     "jyrrie-farm.firebasestorage.app",
+    messagingSenderId: "994448662176",
+    appId:             "1:994448662176:web:d0bd51cb3827ba08ddb3c5",
+    measurementId:     "G-K7GRNJBNTK"
   };
 
   const app = initializeApp(firebaseConfig);
@@ -750,33 +751,10 @@
       <button class="btn btn-secondary" onclick="closeModal()" style="flex:1">Abbrechen</button>
       <button class="btn btn-primary" onclick="checkPin()" style="flex:1">Einloggen</button>
     </div>
-    <p style="font-size:12px;color:#aaa;margin-top:14px;text-align:center">Standard-PIN: 0909</p>
+    <p style="font-size:12px;color:#aaa;margin-top:14px;text-align:center">Standard-PIN: 1234</p>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyDX7aujTemVHBkMUztCCG0NQ03sb1t2HI8",
-    authDomain: "jyrrie-farm.firebaseapp.com",
-    projectId: "jyrrie-farm",
-    storageBucket: "jyrrie-farm.firebasestorage.app",
-    messagingSenderId: "994448662176",
-    appId: "1:994448662176:web:d0bd51cb3827ba08ddb3c5",
-    measurementId: "G-K7GRNJBNTK"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-</script>
 </body>
 </html>
