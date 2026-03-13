@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jyrrie Farm — Mitarbeiterverwaltung</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+<!-- ✅ SCHRITT 1: Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
+    doc, onSnapshot, query, orderBy, setDoc, getDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // ============================================================
+  // ✅ SCHRITT 2: DEINE FIREBASE CONFIG HIER EINTRAGEN
+  //    (aus Firebase Console → Projekteinstellungen → Web-App)
+  // ============================================================
+  const firebaseConfig = {
+    apiKey:            "DEIN_API_KEY",
+    authDomain:        "DEIN_PROJEKT.firebaseapp.com",
+    projectId:         "DEIN_PROJEKT_ID",
+    storageBucket:     "DEIN_PROJEKT.appspot.com",
+    messagingSenderId: "DEINE_SENDER_ID",
+    appId:             "DEINE_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  // ── Refs ──────────────────────────────────────────────────────
+  const entriesRef = collection(db, 'entries');
+  const ratesRef   = doc(db, 'config', 'rates');
+
+  // ── State ─────────────────────────────────────────────────────
+  let entries  = [];
+  let rates    = { __default__: 80 };
+  let isAdmin  = false;
+  let editingId = null;
+  const ADMIN_PIN = '1234'; // ← PIN hier ändern
+
+  // ── Utilities ────────────────────────────────────────────────
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+  function today() { return new Date().toISOString().split('T')[0]; }
+  function getRate(name) { return rates[name] ?? rates.__default__ ?? 80; }
+  function fmtDate(d) {
+    return new Date(d + 'T00:00:00').toLocaleDateString('de-DE',
+      {day:'2-digit', month:'2-digit', year:'numeric'});
+  }
+
+  // ── Loading Overlay ──────────────────────────────────────────
+  function showLoading(msg) {
+    document.getElementById('loadingText').textContent = msg || 'Verbinde mit Datenbank…';
+    document.getElementById('loadingOverlay').style.display = 'flex';
+  }
+  function hideLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+  }
+  function showConfigError() {
+    document.getElementById('configError').style.display = 'flex';
+    document.getElementById('loadingOverlay').style.display = 'none';
+  }
+
+  // ── Firebase: Load Rates ─────────────────────────────────────
+  async function loadRates() {
+    try {
+      const snap = await getDoc(ratesRef);
+      if (snap.exists()) rates = snap.data();
+      else { await setDoc(ratesRef, rates); }
+    } catch(e) { console.warn('Rates load error', e); }
+  }
+
+  async function saveRates() {
+    await setDoc(ratesRef, rates);
+  }
+
+  // ── Firebase: Real-time Listener ─────────────────────────────
+  function startListener() {
+    const q = query(entriesRef, orderBy('date', 'desc'));
+    onSnapshot(q, (snap) => {
+      entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderTable();
+      updateStats();
+      populateMonthFilter();
+    }, (err) => {
+      console.error(err);
+      toast('⚠ Verbindungsfehler. Seite neu laden.');
+    });
+  }
+
+  // ── Firebase: CRUD ───────────────────────────────────────────
+  async function saveEntry() {
+    let name = document.getElementById('f_name').value;
+    const date     = document.getElementById('f_date').value;
+    const day      = parseFloat(document.getElementById('f_day').value);
+    const expenses = parseFloat(document.getElementById('f_expenses').value) || 0;
+    const notes    = document.getElementById('f_notes').value.trim();
+
+    if (name === '__other__') {
+      name = prompt('Mitarbeitername eingeben:');
+      if (!name) return;
+    }
+    if (!name || !date) { toast('⚠ Bitte Name und Datum ausfüllen.'); return; }
+
+    const payload = { name, date, day, expenses, notes, updatedAt: Date.now() };
+    document.querySelector('[data-save]').disabled = true;
+
+    try {
+      if (editingId) {
+        await updateDoc(doc(db, 'entries', editingId), payload);
+        toast('✓ Eintrag aktualisiert.');
+      } else {
+        await addDoc(entriesRef, { ...payload, createdAt: Date.now() });
+        toast('✓ Eintrag gespeichert.');
+      }
+      clearForm();
+      showTab('entries');
+    } catch(e) {
+      toast('⚠ Fehler beim Speichern: ' + e.message);
+    } finally {
+      document.querySelector('[data-save]').disabled = false;
+    }
+  }
+
+  async function deleteEntry(id) {
+    if (!confirm('Eintrag wirklich löschen?')) return;
+    await deleteDoc(doc(db, 'entries', id));
+    toast('Eintrag gelöscht.');
+  }
+
+  // ── Admin ────────────────────────────────────────────────────
+  window.toggleAdminMode = function() {
+    if (isAdmin) {
+      isAdmin = false;
+      document.getElementById('adminSection').classList.remove('visible');
+      document.getElementById('adminBadge').classList.remove('visible');
+      document.getElementById('adminToggleBtn').textContent = 'Admin-Login';
+      toast('Abgemeldet.');
+    } else {
+      document.getElementById('adminModal').classList.add('open');
+      document.getElementById('pinInput').value = '';
+      document.getElementById('pinError').style.display = 'none';
+      setTimeout(() => document.getElementById('pinInput').focus(), 100);
+    }
+  };
+  window.closeModal = function() {
+    document.getElementById('adminModal').classList.remove('open');
+  };
+  window.checkPin = async function() {
+    if (document.getElementById('pinInput').value === ADMIN_PIN) {
+      isAdmin = true;
+      closeModal();
+      document.getElementById('adminSection').classList.add('visible');
+      document.getElementById('adminBadge').classList.add('visible');
+      document.getElementById('adminToggleBtn').textContent = 'Abmelden';
+      renderRates();
+      toast('✓ Als Admin eingeloggt.');
+    } else {
+      document.getElementById('pinError').style.display = 'block';
+      document.getElementById('pinInput').value = '';
+    }
+  };
+
+  window.updateRate = async function(name, val) {
+    rates[name] = parseFloat(val) || 0;
+    await saveRates();
+    renderTable();
+    updateStats();
+    toast('✓ Tagessatz gespeichert.');
+  };
+  window.deleteRate = async function(name) {
+    if (!confirm(`Tagessatz für "${name}" löschen?`)) return;
+    delete rates[name];
+    await saveRates();
+    renderRates();
+    renderTable();
+  };
+  window.addRate = async function() {
+    const name = document.getElementById('newRateName').value.trim();
+    const val  = parseFloat(document.getElementById('newRateValue').value);
+    if (!name) { toast('Bitte Namen eingeben.'); return; }
+    if (isNaN(val)) { toast('Bitte Tagessatz eingeben.'); return; }
+    rates[name] = val;
+    await saveRates();
+    document.getElementById('newRateName').value = '';
+    document.getElementById('newRateValue').value = '';
+    renderRates();
+    populateNameSelect();
+    toast(`✓ "${name}" — ${val} €/Tag gespeichert.`);
+  };
+
+  function renderRates() {
+    const grid = document.getElementById('ratesGrid');
+    grid.innerHTML = Object.entries(rates)
+      .filter(([k]) => k !== '__default__')
+      .map(([name, val]) => `
+        <div class="rate-item">
+          <span class="rate-name">${name}</span>
+          <div class="rate-input-wrap">
+            <span class="rate-currency">€</span>
+            <input class="rate-input" type="number" value="${val}" min="0" step="1"
+              onchange="updateRate('${name}', this.value)">
+            <button onclick="deleteRate('${name}')" class="rate-del">✕</button>
+          </div>
+        </div>`)
+      .join('') + `
+        <div class="rate-item">
+          <span class="rate-name" style="color:var(--text-muted)">Standard (alle anderen)</span>
+          <div class="rate-input-wrap">
+            <span class="rate-currency">€</span>
+            <input class="rate-input" type="number" value="${rates.__default__ ?? 80}" min="0" step="1"
+              onchange="updateRate('__default__', this.value)">
+          </div>
+        </div>`;
+  }
+
+  function populateNameSelect() {
+    const sel = document.getElementById('f_name');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— Name auswählen —</option>' +
+      Object.keys(rates)
+        .filter(k => k !== '__default__')
+        .map(n => `<option value="${n}"${n===cur?' selected':''}>${n}</option>`)
+        .join('') +
+      '<option value="__other__">Anderer Name…</option>';
+  }
+
+  // ── Form ─────────────────────────────────────────────────────
+  window.clearForm = function() {
+    document.getElementById('f_name').value = '';
+    document.getElementById('f_date').value = today();
+    document.getElementById('f_day').value = '1';
+    document.getElementById('f_expenses').value = '';
+    document.getElementById('f_notes').value = '';
+    editingId = null;
+    const btn = document.querySelector('[data-save]');
+    if (btn) btn.textContent = '💾 Eintrag speichern';
+  };
+  window.saveEntry = saveEntry;
+  window.editEntry = function(id) {
+    const e = entries.find(x => x.id === id);
+    if (!e) return;
+    editingId = id;
+    document.getElementById('f_name').value   = e.name;
+    document.getElementById('f_date').value   = e.date;
+    document.getElementById('f_day').value    = e.day;
+    document.getElementById('f_expenses').value = e.expenses || '';
+    document.getElementById('f_notes').value  = e.notes || '';
+    const btn = document.querySelector('[data-save]');
+    if (btn) btn.textContent = '✏ Eintrag aktualisieren';
+    showTab('new');
+  };
+  window.deleteEntry = deleteEntry;
+
+  // ── Table ────────────────────────────────────────────────────
+  function renderTable() {
+    const fName  = (document.getElementById('filterName')?.value || '').toLowerCase();
+    const fMonth = document.getElementById('filterMonth')?.value || '';
+    const fDay   = document.getElementById('filterDay')?.value   || '';
+
+    const filtered = entries.filter(e =>
+      (!fName  || e.name.toLowerCase().includes(fName))  &&
+      (!fMonth || e.date.startsWith(fMonth))             &&
+      (!fDay   || e.day.toString() === fDay)
+    );
+
+    const tbody = document.getElementById('tableBody');
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="8">
+        <div class="empty-state">
+          <div class="empty-icon">🌱</div>
+          <p>Noch keine Einträge vorhanden.</p>
+        </div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filtered.map(e => {
+      const rate = getRate(e.name);
+      const wage = rate * e.day;
+      return `<tr>
+        <td class="td-name">${e.name}</td>
+        <td>${fmtDate(e.date)}</td>
+        <td><span class="day-badge ${e.day===1?'day-full':'day-half'}">${e.day===1?'1.0 — Voll':'0.5 — Halb'}</span></td>
+        <td>${e.expenses ? e.expenses.toFixed(2)+' €' : '—'}</td>
+        <td>${rate.toFixed(0)} €/Tag</td>
+        <td class="td-wage">${wage.toFixed(2)} €</td>
+        <td class="td-note">${e.notes||'—'}</td>
+        <td><div class="td-actions">
+          <button class="btn btn-edit" onclick="editEntry('${e.id}')">✏</button>
+          ${isAdmin?`<button class="btn btn-danger" onclick="deleteEntry('${e.id}')">✕</button>`:''}
+        </div></td>`;
+    }).join('');
+  }
+  window.renderTable = renderTable;
+
+  // ── Stats ────────────────────────────────────────────────────
+  function updateStats() {
+    const m = new Date().toISOString().slice(0,7);
+    const cur = entries.filter(e => e.date.startsWith(m));
+    document.getElementById('statDays').textContent =
+      cur.reduce((s,e) => s+e.day, 0).toFixed(1);
+    document.getElementById('statWages').textContent =
+      cur.reduce((s,e) => s+getRate(e.name)*e.day, 0).toFixed(0)+' €';
+    document.getElementById('statExpenses').textContent =
+      cur.reduce((s,e) => s+(e.expenses||0), 0).toFixed(0)+' €';
+    document.getElementById('statEntries').textContent = entries.length;
+  }
+
+  // ── Monthly ──────────────────────────────────────────────────
+  window.renderMonthly = function() {
+    const months = {};
+    entries.forEach(e => {
+      const m = e.date.slice(0,7);
+      if (!months[m]) months[m] = {};
+      if (!months[m][e.name]) months[m][e.name] = {days:0, wage:0, expenses:0};
+      months[m][e.name].days     += e.day;
+      months[m][e.name].wage     += getRate(e.name)*e.day;
+      months[m][e.name].expenses += e.expenses||0;
+    });
+    const grid = document.getElementById('monthlyGrid');
+    const sorted = Object.keys(months).sort().reverse();
+    if (!sorted.length) { grid.innerHTML = '<p style="color:var(--text-muted);font-size:14px;">Noch keine Daten.</p>'; return; }
+    grid.innerHTML = sorted.map(m => {
+      const [yr,mo] = m.split('-');
+      const label   = new Date(yr,mo-1).toLocaleDateString('de-DE',{month:'long',year:'numeric'});
+      const ws      = months[m];
+      const tWage   = Object.values(ws).reduce((s,w) => s+w.wage, 0);
+      const tDays   = Object.values(ws).reduce((s,w) => s+w.days, 0);
+      const tExp    = Object.values(ws).reduce((s,w) => s+w.expenses, 0);
+      return `<div class="month-card">
+        <h4>${label}</h4>
+        ${Object.entries(ws).map(([n,w]) => `
+          <div class="month-row"><span>${n}</span><span>${w.days}T · ${w.wage.toFixed(0)}€</span></div>
+        `).join('')}
+        <div class="month-row total"><span>∑ ${tDays} Tage</span><span>${tWage.toFixed(0)} €</span></div>
+        ${tExp>0?`<div class="month-row" style="font-size:12px;color:var(--terracotta)"><span>+ Ausgaben</span><span>${tExp.toFixed(2)} €</span></div>`:''}
+      </div>`;
+    }).join('');
+  };
+
+  // ── Month Filter ─────────────────────────────────────────────
+  function populateMonthFilter() {
+    const months = [...new Set(entries.map(e => e.date.slice(0,7)))].sort().reverse();
+    const sel = document.getElementById('filterMonth');
+    const cur = sel?.value || '';
+    if (sel) sel.innerHTML = '<option value="">Alle Monate</option>' +
+      months.map(m => {
+        const [yr,mo] = m.split('-');
+        const label = new Date(yr,mo-1).toLocaleDateString('de-DE',{month:'long',year:'numeric'});
+        return `<option value="${m}"${m===cur?' selected':''}>${label}</option>`;
+      }).join('');
+  }
+
+  // ── Export ───────────────────────────────────────────────────
+  window.exportCSV = function() {
+    const lines = [['Name','Datum','Arbeitstag','Tagessatz','Lohn','Ausgaben','Bemerkungen']];
+    [...entries].sort((a,b)=>a.date.localeCompare(b.date)).forEach(e => {
+      const r = getRate(e.name);
+      lines.push([e.name,e.date,e.day,r,(r*e.day).toFixed(2),e.expenses||0,e.notes||'']);
+    });
+    const csv  = lines.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `JyrrieFarm_${today()}.csv`;
+    a.click();
+    toast('✓ CSV exportiert.');
+  };
+  window.exportPrint = () => window.print();
+
+  // ── Tabs ─────────────────────────────────────────────────────
+  window.showTab = function(name) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-'+name)?.classList.add('active');
+    document.querySelector(`.tab[data-tab="${name}"]`)?.classList.add('active');
+    if (name==='monthly') window.renderMonthly();
+    if (name==='entries') renderTable();
+  };
+
+  // ── Init ─────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('f_date').value = today();
+
+    // Prüfe ob Config ausgefüllt ist
+    if (firebaseConfig.apiKey === 'DEIN_API_KEY') {
+      showConfigError();
+      return;
+    }
+
+    showLoading('Verbinde mit Jyrrie Farm Datenbank…');
+    try {
+      await loadRates();
+      populateNameSelect();
+      startListener();
+      hideLoading();
+    } catch(e) {
+      console.error(e);
+      toast('⚠ Firebase-Verbindung fehlgeschlagen.');
+      hideLoading();
+    }
+
+    document.getElementById('pinInput')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') window.checkPin();
+    });
+  });
+</script>
+
+<style>
+  :root {
+    --green-deep: #1a3a2a;
+    --green-mid:  #2d5a3d;
+    --green-light:#4a7c59;
+    --green-pale: #e8f0ea;
+    --green-mist: #f2f7f3;
+    --amber:      #c8821a;
+    --amber-pale: #fdf3e3;
+    --terracotta: #b85c38;
+    --sand:       #f5ede0;
+    --sand-dark:  #e8d8c0;
+    --text-dark:  #1a2418;
+    --text-mid:   #3d4f3a;
+    --text-muted: #7a8c75;
+    --white:      #fefefe;
+    --border:     #d0ddc8;
+    --radius:     10px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:var(--sand);color:var(--text-dark);min-height:100vh;font-size:15px}
+
+  /* LOADING */
+  #loadingOverlay{position:fixed;inset:0;background:rgba(26,58,42,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
+  .spinner{width:44px;height:44px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #loadingText{color:rgba(255,255,255,0.85);font-size:15px;letter-spacing:0.3px}
+  #configError{position:fixed;inset:0;background:var(--sand);display:none;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;gap:16px;z-index:9999}
+  #configError h2{font-family:'Playfair Display',serif;color:var(--green-deep);font-size:22px}
+  #configError p{font-size:14px;color:var(--text-mid);max-width:480px;line-height:1.7}
+  #configError code{background:#fff;border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:13px;color:var(--terracotta)}
+  .config-box{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px 24px;max-width:480px;width:100%;text-align:left;margin-top:8px}
+  .config-box h3{font-size:14px;font-weight:500;color:var(--green-deep);margin-bottom:10px}
+  .config-step{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px;font-size:13px;color:var(--text-mid);line-height:1.6}
+  .step-num{min-width:22px;height:22px;background:var(--green-light);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;margin-top:1px}
+
+  /* HEADER */
+  header{background:var(--green-deep);position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.25)}
+  .header-inner{max-width:1100px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .logo{display:flex;align-items:center;gap:12px}
+  .logo-icon{width:40px;height:40px;background:var(--green-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px}
+  .logo-text h1{font-family:'Playfair Display',serif;font-size:18px;color:#fff;font-weight:700}
+  .logo-text p{font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase;margin-top:1px}
+  .live-dot{width:8px;height:8px;background:#4ade80;border-radius:50%;display:inline-block;margin-right:6px;animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.85)}}
+  .live-label{font-size:12px;color:rgba(255,255,255,0.7);display:flex;align-items:center}
+  .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .admin-badge{background:var(--amber);color:#fff;font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;display:none}
+  .admin-badge.visible{display:inline-block}
+  .btn-header{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:7px 16px;border-radius:20px;cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif;transition:background 0.2s}
+  .btn-header:hover{background:rgba(255,255,255,0.22)}
+
+  main{max-width:1100px;margin:0 auto;padding:28px 16px 60px}
+
+  /* STATS */
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+  .stat-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
+  .stat-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:var(--green-light)}
+  .stat-card.amber::before{background:var(--amber)}
+  .stat-card.terra::before{background:var(--terracotta)}
+  .stat-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px}
+  .stat-value{font-size:24px;font-weight:500;color:var(--text-dark);font-family:'Playfair Display',serif}
+  .stat-sub{font-size:12px;color:var(--text-muted);margin-top:2px}
+
+  /* PANEL */
+  .panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
+  .panel-body{padding:20px}
+
+  /* ADMIN */
+  .admin-section{background:var(--amber-pale);border:1px solid #f0c060;border-radius:var(--radius);padding:18px 20px;margin-bottom:20px;display:none}
+  .admin-section.visible{display:block}
+  .admin-section h3{font-family:'Playfair Display',serif;font-size:15px;color:#7a4f10;margin-bottom:14px}
+  .rates-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+  .rate-item{background:#fff;border:1px solid #f0c060;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .rate-name{font-size:14px;font-weight:500;color:var(--text-dark)}
+  .rate-input-wrap{display:flex;align-items:center;gap:6px}
+  .rate-currency{font-size:13px;color:var(--text-muted)}
+  .rate-input{border:1px solid #f0c060;border-radius:6px;padding:5px 8px;font-size:14px;width:80px;text-align:right;font-family:'DM Sans',sans-serif;background:#fffbf0}
+  .rate-input:focus{outline:none;border-color:var(--amber)}
+  .rate-del{background:none;border:none;cursor:pointer;color:#e57373;font-size:16px;padding:2px 4px}
+
+  /* TABS */
+  .tabs{display:flex;gap:0;border-bottom:1px solid var(--border)}
+  .tab{padding:13px 20px;font-size:14px;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.18s}
+  .tab:hover{color:var(--green-deep)}
+  .tab.active{color:var(--green-deep);font-weight:500;border-bottom-color:var(--green-mid)}
+  .tab-content{display:none}
+  .tab-content.active{display:block}
+
+  /* FORM */
+  .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;align-items:end}
+  .form-group{display:flex;flex-direction:column;gap:6px}
+  .form-group label{font-size:12px;font-weight:500;color:var(--text-mid);letter-spacing:0.3px}
+  .form-group input,.form-group select,.form-group textarea{border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text-dark);background:#fff;transition:border-color 0.2s,box-shadow 0.2s;width:100%}
+  .form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--green-light);box-shadow:0 0 0 3px rgba(74,124,89,0.15)}
+  .form-group textarea{resize:vertical;min-height:40px}
+  .form-actions{display:flex;gap:10px;margin-top:16px;justify-content:flex-end}
+  .btn{padding:10px 22px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;font-family:'DM Sans',sans-serif;border:none;transition:all 0.18s}
+  .btn:disabled{opacity:0.5;cursor:not-allowed}
+  .btn-primary{background:var(--green-mid);color:#fff}
+  .btn-primary:hover:not(:disabled){background:var(--green-deep);transform:translateY(-1px)}
+  .btn-secondary{background:transparent;border:1px solid var(--border);color:var(--text-mid)}
+  .btn-secondary:hover{background:var(--green-mist)}
+  .btn-danger{background:transparent;border:1px solid #fca5a5;color:var(--terracotta);font-size:12px;padding:5px 12px}
+  .btn-danger:hover{background:#fff1f0}
+  .btn-edit{background:transparent;border:1px solid var(--border);color:var(--green-mid);font-size:12px;padding:5px 12px}
+  .btn-edit:hover{background:var(--green-mist)}
+
+  /* FILTER */
+  .filter-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 20px;background:var(--sand);border-bottom:1px solid var(--border)}
+  .filter-bar select,.filter-bar input{border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;color:var(--text-dark)}
+  .filter-bar input{width:160px}
+
+  /* TABLE */
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{width:100%;border-collapse:collapse;min-width:700px}
+  thead th{background:var(--green-deep);color:rgba(255,255,255,0.9);font-size:11px;font-weight:500;letter-spacing:0.8px;text-transform:uppercase;padding:11px 14px;text-align:left;white-space:nowrap}
+  tbody tr{border-bottom:1px solid var(--sand-dark);transition:background 0.15s}
+  tbody tr:hover{background:var(--green-mist)}
+  tbody tr:last-child{border-bottom:none}
+  td{padding:11px 14px;font-size:14px;color:var(--text-dark);vertical-align:middle}
+  .td-name{font-weight:500}
+  .day-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500}
+  .day-full{background:#dcfce7;color:#166534}
+  .day-half{background:#fef9c3;color:#854d0e}
+  .td-wage{font-weight:500;color:var(--green-mid)}
+  .td-note{max-width:180px;white-space:pre-wrap;font-size:13px;color:var(--text-muted)}
+  .td-actions{white-space:nowrap;display:flex;gap:6px;align-items:center}
+  .empty-state{text-align:center;padding:50px 20px;color:var(--text-muted)}
+  .empty-icon{font-size:36px;margin-bottom:12px}
+
+  /* EXPORT */
+  .export-bar{display:flex;gap:10px;align-items:center;padding:14px 20px;background:var(--sand);border-top:1px solid var(--border)}
+  .export-bar span{font-size:13px;color:var(--text-muted);margin-right:4px}
+  .btn-export{background:transparent;border:1px solid var(--border);color:var(--text-mid);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif;transition:all 0.18s}
+  .btn-export:hover{background:var(--green-mist);border-color:var(--green-light);color:var(--green-deep)}
+
+  /* MONTHLY */
+  .month-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+  .month-card{background:var(--green-mist);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .month-card h4{font-size:13px;font-weight:500;color:var(--green-deep);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px}
+  .month-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:var(--text-mid)}
+  .month-row.total{border-top:1px solid var(--border);margin-top:6px;padding-top:8px;font-weight:500;color:var(--text-dark)}
+
+  /* MODAL */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:999;padding:20px}
+  .modal-overlay.open{display:flex}
+  .modal{background:#fff;border-radius:14px;padding:28px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.25)}
+  .modal h2{font-family:'Playfair Display',serif;font-size:20px;color:var(--green-deep);margin-bottom:8px}
+  .modal p{font-size:14px;color:var(--text-muted);margin-bottom:18px}
+  .modal input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:16px;font-family:'DM Sans',sans-serif;letter-spacing:3px;text-align:center;margin-bottom:14px}
+  .modal input:focus{outline:none;border-color:var(--green-light);box-shadow:0 0 0 3px rgba(74,124,89,0.15)}
+  .modal-actions{display:flex;gap:10px}
+  .modal-error{color:var(--terracotta);font-size:13px;margin-top:-8px;margin-bottom:10px;display:none}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--green-deep);color:#fff;padding:12px 20px;border-radius:10px;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,0.2);opacity:0;transform:translateY(10px);transition:all 0.3s;z-index:9999;pointer-events:none}
+  .toast.show{opacity:1;transform:translateY(0)}
+
+  @media(max-width:600px){
+    .form-grid{grid-template-columns:1fr 1fr}
+    .stats-grid{grid-template-columns:1fr 1fr}
+    .header-inner{flex-wrap:wrap}
+    main{padding:16px 12px 40px}
+    .tab{padding:11px 14px;font-size:13px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <div id="loadingText">Verbinde mit Datenbank…</div>
+</div>
+
+<!-- Config Error -->
+<div id="configError">
+  <div style="font-size:40px;margin-bottom:8px">⚙️</div>
+  <h2>Firebase-Konfiguration fehlt</h2>
+  <p>Du musst zuerst deine Firebase-Zugangsdaten in die HTML-Datei eintragen. Hier ist die Schritt-für-Schritt-Anleitung:</p>
+  <div class="config-box">
+    <h3>So richtest du Firebase ein:</h3>
+    <div class="config-step"><div class="step-num">1</div><span>Gehe zu <strong>console.firebase.google.com</strong> und erstelle ein neues Projekt</span></div>
+    <div class="config-step"><div class="step-num">2</div><span>Klicke auf <strong>Firestore Database</strong> → "Datenbank erstellen" → Testmodus</span></div>
+    <div class="config-step"><div class="step-num">3</div><span>Gehe zu <strong>Projekteinstellungen</strong> → Web-App hinzufügen → Config kopieren</span></div>
+    <div class="config-step"><div class="step-num">4</div><span>Ersetze <code>DEIN_API_KEY</code> und die anderen Werte im <code>&lt;script&gt;</code>-Bereich oben</span></div>
+    <div class="config-step"><div class="step-num">5</div><span>Lade die Datei auf <strong>GitHub Pages</strong> hoch — fertig!</span></div>
+  </div>
+</div>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">🌿</div>
+      <div class="logo-text">
+        <h1>Jyrrie Farm</h1>
+        <p>Mitarbeiterverwaltung</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="live-label"><span class="live-dot"></span>Live</div>
+      <span class="admin-badge" id="adminBadge">⚙ Admin</span>
+      <button class="btn-header" id="adminToggleBtn" onclick="toggleAdminMode()">Admin-Login</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Gesamt Arbeitstage</div>
+      <div class="stat-value" id="statDays">—</div>
+      <div class="stat-sub">Aktueller Monat</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="stat-label">Lohnkosten gesamt</div>
+      <div class="stat-value" id="statWages">—</div>
+      <div class="stat-sub">Aktueller Monat</div>
+    </div>
+    <div class="stat-card terra">
+      <div class="stat-label">Ausgaben gesamt</div>
+      <div class="stat-value" id="statExpenses">—</div>
+      <div class="stat-sub">Aktueller Monat</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Einträge gesamt</div>
+      <div class="stat-value" id="statEntries">—</div>
+      <div class="stat-sub">Alle Zeiten</div>
+    </div>
+  </div>
+
+  <div class="admin-section" id="adminSection">
+    <h3>⚙ Tagessätze verwalten</h3>
+    <div class="rates-grid" id="ratesGrid"></div>
+    <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input type="text" id="newRateName" placeholder="Neuer Mitarbeitername…"
+        style="border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:14px;background:#fffbf0;font-family:'DM Sans',sans-serif;width:200px">
+      <input type="number" id="newRateValue" placeholder="Tagessatz €"
+        style="border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:14px;background:#fffbf0;font-family:'DM Sans',sans-serif;width:130px">
+      <button class="btn" style="background:var(--amber);color:#fff;padding:9px 18px" onclick="addRate()">+ Hinzufügen</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="tabs">
+      <div class="tab active" data-tab="entries" onclick="showTab('entries')">📋 Einträge</div>
+      <div class="tab" data-tab="new" onclick="showTab('new')">+ Neuer Eintrag</div>
+      <div class="tab" data-tab="monthly" onclick="showTab('monthly')">📊 Monatsübersicht</div>
+    </div>
+
+    <!-- NEW ENTRY -->
+    <div class="tab-content" id="tab-new">
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Name des Mitarbeiters *</label>
+            <select id="f_name"><option value="">— auswählen —</option></select>
+          </div>
+          <div class="form-group">
+            <label>Datum *</label>
+            <input type="date" id="f_date">
+          </div>
+          <div class="form-group">
+            <label>Arbeitstag *</label>
+            <select id="f_day">
+              <option value="1">1.0 — Voller Tag</option>
+              <option value="0.5">0.5 — Halber Tag</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Ausgaben / Einkäufe (€)</label>
+            <input type="number" id="f_expenses" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <div class="form-group" style="grid-column:span 2">
+            <label>Bemerkungen</label>
+            <textarea id="f_notes" placeholder="Optionale Notizen…"></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="clearForm()">Abbrechen</button>
+          <button class="btn btn-primary" data-save onclick="saveEntry()">💾 Eintrag speichern</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ENTRIES -->
+    <div class="tab-content active" id="tab-entries">
+      <div class="filter-bar">
+        <input type="text" id="filterName" placeholder="🔍 Name filtern…" oninput="renderTable()">
+        <select id="filterMonth" onchange="renderTable()"><option value="">Alle Monate</option></select>
+        <select id="filterDay" onchange="renderTable()">
+          <option value="">Alle Arbeitstage</option>
+          <option value="1">Voller Tag</option>
+          <option value="0.5">Halber Tag</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mitarbeiter</th><th>Datum</th><th>Arbeitstag</th>
+              <th>Ausgaben</th><th>Tagessatz</th><th>Lohn</th>
+              <th>Bemerkungen</th><th>Aktionen</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🌱</div><p>Verbinde…</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="export-bar">
+        <span>Exportieren:</span>
+        <button class="btn-export" onclick="exportCSV()">📄 CSV</button>
+        <button class="btn-export" onclick="exportPrint()">🖨 Drucken / PDF</button>
+      </div>
+    </div>
+
+    <!-- MONTHLY -->
+    <div class="tab-content" id="tab-monthly">
+      <div class="panel-body">
+        <div class="month-grid" id="monthlyGrid"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Admin Modal -->
+<div class="modal-overlay" id="adminModal">
+  <div class="modal">
+    <h2>🔒 Admin-Login</h2>
+    <p>Gib die Admin-PIN ein, um Tagessätze zu verwalten.</p>
+    <input type="password" id="pinInput" placeholder="• • • •" maxlength="6">
+    <p class="modal-error" id="pinError">Falsche PIN. Bitte erneut versuchen.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()" style="flex:1">Abbrechen</button>
+      <button class="btn btn-primary" onclick="checkPin()" style="flex:1">Einloggen</button>
+    </div>
+    <p style="font-size:12px;color:#aaa;margin-top:14px;text-align:center">Standard-PIN: 0909</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyDX7aujTemVHBkMUztCCG0NQ03sb1t2HI8",
+    authDomain: "jyrrie-farm.firebaseapp.com",
+    projectId: "jyrrie-farm",
+    storageBucket: "jyrrie-farm.firebasestorage.app",
+    messagingSenderId: "994448662176",
+    appId: "1:994448662176:web:d0bd51cb3827ba08ddb3c5",
+    measurementId: "G-K7GRNJBNTK"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
+</body>
+</html>
