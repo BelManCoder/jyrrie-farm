@@ -295,13 +295,23 @@
     delete rates[name]; await saveRates(); renderRates(); renderTable();
   };
   window.addRate = async function() {
-    const name = document.getElementById('newRateName').value.trim();
-    const val  = parseFloat(document.getElementById('newRateValue').value);
-    if (!name||isNaN(val)) { toast(t.fillFields); return; }
-    rates[name]=val; await saveRates();
-    document.getElementById('newRateName').value='';
-    document.getElementById('newRateValue').value='';
-    renderRates(); populateNameSelect(); toast(t.toastAdded);
+    const name   = document.getElementById('newRateName').value.trim();
+    const valRaw = document.getElementById('newRateValue').value.trim();
+    const val    = parseFloat(valRaw);
+    if (!name)           { toast('⚠ Bitte Namen eingeben.');     return; }
+    if (!valRaw||isNaN(val)) { toast('⚠ Bitte Tagessatz eingeben.'); return; }
+    rates[name] = val;
+    document.getElementById('newRateName').value  = '';
+    document.getElementById('newRateValue').value = '';
+    renderRates();
+    populateNameSelect();
+    toast(t.toastAdded);
+    try {
+      await saveRates();
+    } catch(e) {
+      console.error('saveRates error:', e);
+      toast('⚠ Speicherfehler: ' + e.message);
+    }
   };
 
   function renderRates() {
