@@ -251,7 +251,7 @@ function fmtDate(d) {
   const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
   return new Date(d + "T00:00:00").toLocaleDateString(locale, {day:"2-digit", month:"2-digit", year:"numeric"});
 }
-function fmtMoney(v) { return Number(v).toFixed(2) + " " + CURRENCY; }
+function fmtMoney(v) { const n = Number(v); return (n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)) + " " + CURRENCY; }
 function fmtMoneyInt(v) { return Number(v).toFixed(0) + " " + CURRENCY; }
 function fmtDateTime(ts) {
   if (!ts) return "—";
@@ -483,13 +483,17 @@ function renderTable() {
         && (!fType  || type === fType);
   });
 
+  // Show/hide Aktionen column header
+  const thAkt = document.getElementById("thAktionen");
+  if (thAkt) thAkt.style.display = isAdmin ? "" : "none";
+
   const tbody = document.getElementById("tableBody");
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🌱</div><p>' + t.noEntries + '</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="' + (isAdmin ? 7 : 6) + '"><div class="empty-state"><div class="empty-icon">🌱</div><p>' + t.noEntries + '</p></div></td></tr>';
     return;
   }
 
-  tbody.innerHTML = filtered.map(function(e) {
+  tbody.innerHTML = filtered.map(function(e, idx) {
     const type    = e.type || (e.expenses > 0 ? "expense" : "work");
     const isWork  = type === "work";
     const rate    = getRate(e.name);
@@ -509,17 +513,15 @@ function renderTable() {
       ? '<button class="btn btn-danger" onclick="deleteEntry(\'' + e.id + '\')">🗑</button>'
       : "";
 
-    return '<tr>'
+    const rowBg = idx % 2 === 0 ? '' : ' style="background:var(--sand)"';
+    return '<tr' + rowBg + '>'
       + '<td class="td-name">' + e.name + '</td>'
       + '<td>' + fmtDate(e.date) + '</td>'
       + '<td>' + typeBadge + '</td>'
       + '<td>' + details + '</td>'
       + '<td class="td-note">' + (e.notes || "—") + '</td>'
       + '<td style="font-size:12px;color:var(--text-muted);white-space:nowrap">' + fmtDateTime(e.updatedAt || e.createdAt) + '</td>'
-      + '<td><div class="td-actions">'
-      + editBtn
-      + delBtn
-      + '</div></td>'
+      + (isAdmin ? '<td><div class="td-actions">' + editBtn + delBtn + '</div></td>' : '')
       + '</tr>';
   }).join("");
 }
@@ -993,7 +995,7 @@ body.rtl .modal h2{font-family:'Noto Sans Arabic',sans-serif}
               <th>Details</th>
               <th>Bemerkungen</th>
               <th>Letzte Änderung</th>
-              <th>Aktionen</th>
+              <th id="thAktionen">Aktionen</th>
             </tr>
           </thead>
           <tbody id="tableBody">
