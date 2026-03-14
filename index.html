@@ -57,7 +57,7 @@ const T = {
     addBtn:"+ Hinzufügen", standard:"Standard (alle anderen)",
     pinTitle:"🔒 Admin-Login", pinDesc:"Gib die Admin-PIN ein.",
     pinError:"Falsche PIN.", pinHint:"Standard-PIN: 1234",
-    fullBadge:"1.0 — Voll", halfBadge:"0.5 — Halb",
+    fullBadge:"1 Tag", halfBadge:"½ Tag", fullDay:"Voller Tag", halfDay:"Halber Tag",
     loading:"Verbinde mit Datenbank...",
     toastSaved:"✓ Eintrag gespeichert.", toastUpdated:"✓ Aktualisiert.",
     toastDeleted:"Eintrag gelöscht.", toastRate:"✓ Tagessatz gespeichert.",
@@ -65,7 +65,7 @@ const T = {
     toastLoggedOut:"Abgemeldet.", fillFields:"⚠ Bitte alle Pflichtfelder ausfüllen.",
     fillAmount:"⚠ Bitte Betrag eingeben.",
     confirmDelete:"Eintrag wirklich löschen?", confirmRate:"Tagessatz löschen?",
-    enterName:"Mitarbeitername:", noData:"Noch keine Daten.", perDay:"/Tag", dayUnit:"T",
+    enterName:"Mitarbeitername:", noData:"Noch keine Daten.", perDay:"/Tag", dayUnit:"Tag",
     accessPrompt:"🔒 Bitte Zugangscode eingeben",
     accessBtn:"Zugang bestätigen →", accessError:"❌ Falscher Code. Bitte erneut versuchen.",
     accessFooter:"Nur für autorisierte Mitarbeiter",
@@ -98,7 +98,7 @@ const T = {
     addBtn:"+ Ajouter", standard:"Standard (tous les autres)",
     pinTitle:"🔒 Connexion Admin", pinDesc:"Entrez le code PIN admin.",
     pinError:"PIN incorrect.", pinHint:"PIN par défaut: 1234",
-    fullBadge:"1.0 — Complet", halfBadge:"0.5 — Demi",
+    fullBadge:"1 Jour", halfBadge:"½ Jour", fullDay:"Journée complète", halfDay:"Demi-journée",
     loading:"Connexion à la base de données...",
     toastSaved:"✓ Entrée enregistrée.", toastUpdated:"✓ Mise à jour effectuée.",
     toastDeleted:"Entrée supprimée.", toastRate:"✓ Taux enregistré.",
@@ -106,7 +106,7 @@ const T = {
     toastLoggedOut:"Déconnecté.", fillFields:"⚠ Remplissez tous les champs obligatoires.",
     fillAmount:"⚠ Veuillez entrer un montant.",
     confirmDelete:"Supprimer cette entrée?", confirmRate:"Supprimer ce taux?",
-    enterName:"Nom de l'employé:", noData:"Aucune donnée disponible.", perDay:"/jour", dayUnit:"j",
+    enterName:"Nom de l'employé:", noData:"Aucune donnée disponible.", perDay:"/jour", dayUnit:"Jour",
     accessPrompt:"🔒 Entrez le code d'accès",
     accessBtn:"Confirmer l'accès →", accessError:"❌ Code incorrect. Veuillez réessayer.",
     accessFooter:"Réservé aux employés autorisés",
@@ -139,7 +139,7 @@ const T = {
     addBtn:"+ إضافة", standard:"القياسي (الآخرون)",
     pinTitle:"🔒 دخول المشرف", pinDesc:"أدخل رمز PIN للمشرف.",
     pinError:"رمز PIN خاطئ.", pinHint:"PIN الافتراضي: 1234",
-    fullBadge:"1.0 — كامل", halfBadge:"0.5 — نصف",
+    fullBadge:"يوم كامل", halfBadge:"نصف يوم", fullDay:"يوم كامل", halfDay:"نصف يوم",
     loading:"جارٍ الاتصال بقاعدة البيانات...",
     toastSaved:"✓ تم حفظ الإدخال.", toastUpdated:"✓ تم التحديث.",
     toastDeleted:"تم الحذف.", toastRate:"✓ تم حفظ الأجر.",
@@ -147,7 +147,7 @@ const T = {
     toastLoggedOut:"تم تسجيل الخروج.", fillFields:"⚠ يرجى ملء جميع الحقول الإلزامية.",
     fillAmount:"⚠ يرجى إدخال المبلغ.",
     confirmDelete:"هل تريد حذف هذا الإدخال؟", confirmRate:"هل تريد حذف هذا الأجر؟",
-    enterName:"اسم الموظف:", noData:"لا توجد بيانات بعد.", perDay:"/يوم", dayUnit:"ي",
+    enterName:"اسم الموظف:", noData:"لا توجد بيانات بعد.", perDay:"/يوم", dayUnit:"يوم",
     accessPrompt:"🔒 أدخل رمز الوصول",
     accessBtn:"تأكيد الدخول →", accessError:"❌ رمز خاطئ. حاول مرة أخرى.",
     accessFooter:"للموظفين المصرح لهم فقط",
@@ -260,8 +260,8 @@ function updateAllText() {
   // Day select options
   const fd = document.getElementById("f_day");
   if (fd) {
-    fd.options[0].textContent = "1.0 — " + (lang === "ar" ? "يوم كامل" : lang === "fr" ? "Journée complète" : "Voller Tag");
-    fd.options[1].textContent = "0.5 — " + (lang === "ar" ? "نصف يوم" : lang === "fr" ? "Demi-journée" : "Halber Tag");
+    fd.options[0].textContent = t.fullBadge;
+    fd.options[1].textContent = t.halfBadge;
   }
 
   // Access screen
@@ -576,9 +576,16 @@ function renderTable() {
       ? '<span class="day-badge day-full">🌾 ' + typeWorkLbl + '</span>'
       : '<span class="day-badge day-expense">🛒 ' + typeExpLbl + '</span>';
 
+    const dayLbl  = e.day === 1 ? t.fullBadge : t.halfBadge;
+    const dayClass = e.day === 1 ? "day-full" : "day-half";
     const details = isWork
-      ? '<span class="day-badge ' + (e.day === 1 ? "day-full" : "day-half") + '">' + (e.day === 1 ? t.fullBadge : t.halfBadge) + " · " + rate + " " + CURRENCY + t.perDay + '</span>'
-      : '<strong>' + fmtMoney(e.expenses) + '</strong>';
+      ? '<div class="detail-work">'
+        + '<span class="day-badge ' + dayClass + '">' + dayLbl + '</span>'
+        + '<span class="detail-rate" dir="ltr">' + rate + ' ' + CURRENCY + t.perDay + '</span>'
+        + '</div>'
+      : '<div class="detail-expense">'
+        + '<span class="detail-exp-amt" dir="ltr">' + fmtMoney(e.expenses) + '</span>'
+        + '</div>';
 
     const editBtn = isAdmin
       ? '<button class="btn btn-edit" onclick="editEntry(\'' + e.id + '\')">✏</button>'
@@ -1008,7 +1015,11 @@ tbody tr{border-bottom:1px solid var(--sand-dark);transition:background .15s}
 tbody tr:hover{background:var(--green-mist)}
 td{padding:10px 14px;font-size:14px;vertical-align:middle}
 .td-name{font-weight:500}
-.day-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500}
+.day-badge{display:inline-block;padding:4px 11px;border-radius:12px;font-size:13px;font-weight:500}
+.detail-work{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.detail-rate{font-size:12px;color:var(--text-muted);font-weight:400;white-space:nowrap}
+.detail-expense{display:flex;align-items:center}
+.detail-exp-amt{font-size:14px;font-weight:600;color:var(--terracotta);unicode-bidi:embed;direction:ltr}
 .day-full{background:#dcfce7;color:#166534}
 .day-half{background:#fef9c3;color:#854d0e}
 .day-expense{background:#fff3cd;color:#856404}
