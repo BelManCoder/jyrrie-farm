@@ -2,7 +2,10 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a3a2a">
 <title>Jyrrie Farm</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=DM+Sans:wght@300;400;500&family=Noto+Sans+Arabic:wght@300;400;500&display=swap" rel="stylesheet">
 <script type="module">
@@ -288,8 +291,7 @@ function fmtDate(d) {
 }
 function fmtMoney(v) {
   const n = Number(v);
-  const num = n % 1 === 0 ? n.toFixed(0) : n.toFixed(2);
-  return lang === "ar" ? num + " " + CURRENCY : num + " " + CURRENCY;
+  return (n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)) + " " + CURRENCY;
 }
 function fmtMoneyInt(v) { return Number(v).toFixed(0) + " " + CURRENCY; }
 function fmtDateTime(ts) {
@@ -335,8 +337,12 @@ window.togglePayment = async function(monthKey) {
 };
 
 function startListener() {
-  onSnapshot(query(entriesRef, orderBy("updatedAt", "desc")), snap => {
-    entries = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+  onSnapshot(collection(db, "entries"), snap => {
+    entries = snap.docs
+      .map(d => Object.assign({ id: d.id }, d.data()))
+      .sort(function(a, b) {
+        return (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
+      });
     renderTable();
     updateStats();
     populateMonthFilter();
@@ -391,15 +397,16 @@ async function saveEntry() {
       toast(t.toastSaved);
     }
     clearForm();
-    showTab("entries");
   } catch(e) { toast("⚠ " + e.message); }
   finally { if (btn) btn.disabled = false; }
 }
 
 async function deleteEntry(id) {
   if (!confirm(t.confirmDelete)) return;
-  await deleteDoc(doc(db, "entries", id));
-  toast(t.toastDeleted);
+  try {
+    await deleteDoc(doc(db, "entries", id));
+    toast(t.toastDeleted);
+  } catch(e) { toast("⚠ " + e.message); }
 }
 
 window.saveEntry   = saveEntry;
@@ -442,7 +449,7 @@ window.editEntry = function(id) {
   }
   const btn = document.querySelector("[data-save]");
   if (btn) btn.textContent = t.update;
-  showTab("new");
+  window.showTabMobile("new");
 };
 
 // ── ADMIN ────────────────────────────────────────────────────
@@ -493,8 +500,7 @@ window.addRate = async function() {
   const name = document.getElementById("newRateName").value.trim();
   const raw  = document.getElementById("newRateValue").value.trim();
   const val  = parseFloat(raw);
-  if (!name) { toast("⚠ Bitte Namen eingeben."); return; }
-  if (!raw || isNaN(val)) { toast("⚠ Bitte Tagessatz eingeben."); return; }
+  if (!name || !raw || isNaN(val)) { toast(t.fillFields); return; }
   rates[name] = val;
   document.getElementById("newRateName").value  = "";
   document.getElementById("newRateValue").value = "";
@@ -552,14 +558,23 @@ function renderTable() {
     return;
   }
 
+  const colName   = t.cols[0] || "Mitarbeiter";
+  const colDate   = t.cols[1] || "Datum";
+  const colType   = t.cols[2] || "Typ";
+  const colDetail = t.cols[3] || "Details";
+  const colNotes  = t.cols[4] || "Bemerkungen";
+  const colChg    = t.cols[5] || "Letzte Änderung";
+
   tbody.innerHTML = filtered.map(function(e, idx) {
     const type    = e.type || (e.expenses > 0 ? "expense" : "work");
     const isWork  = type === "work";
     const rate    = getRate(e.name);
 
+    const typeWorkLbl = t.btnWork.replace(/^\S+\s/,"");
+    const typeExpLbl  = t.btnExpense.replace(/^\S+\s/,"");
     const typeBadge = isWork
-      ? '<span class="day-badge day-full">🌾 ' + (lang === "ar" ? "عمل" : lang === "fr" ? "Travail" : "Arbeitstag") + '</span>'
-      : '<span class="day-badge day-expense">🛒 ' + (lang === "ar" ? "مصاريف" : lang === "fr" ? "Dépense" : "Ausgaben") + '</span>';
+      ? '<span class="day-badge day-full">🌾 ' + typeWorkLbl + '</span>'
+      : '<span class="day-badge day-expense">🛒 ' + typeExpLbl + '</span>';
 
     const details = isWork
       ? '<span class="day-badge ' + (e.day === 1 ? "day-full" : "day-half") + '">' + (e.day === 1 ? t.fullBadge : t.halfBadge) + " · " + rate + " " + CURRENCY + t.perDay + '</span>'
@@ -572,12 +587,6 @@ function renderTable() {
       ? '<button class="btn btn-danger" onclick="deleteEntry(\'' + e.id + '\')">🗑</button>'
       : "";
 
-    const colName   = t.cols[0] || "Mitarbeiter";
-    const colDate   = t.cols[1] || "Datum";
-    const colType   = t.cols[2] || "Typ";
-    const colDetail = t.cols[3] || "Details";
-    const colNotes  = t.cols[4] || "Bemerkungen";
-    const colChg    = t.cols[5] || "Letzte Änderung";
     const rowBg = idx % 2 === 0 ? '' : ' class="odd-row"';
     return '<tr' + rowBg + '>'
       + '<td data-label="' + colName   + '" class="td-name">' + e.name + '</td>'
@@ -628,18 +637,13 @@ window.renderMonthly = function() {
 
   const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
 
-  // Also build flat months map for yearly summary (reuse same data loop)
+  // Reuse months for yearly summary (no second loop needed)
   const monthsForSummary = {};
-  entries.forEach(function(e) {
-    const m    = e.date.slice(0, 7);
-    const type = e.type || (e.expenses > 0 ? "expense" : "work");
-    if (!monthsForSummary[m]) monthsForSummary[m] = { workers: {}, expensesList: [] };
-    if (type === "work") {
-      if (!monthsForSummary[m].workers[e.name]) monthsForSummary[m].workers[e.name] = { days: 0, wage: 0 };
-      monthsForSummary[m].workers[e.name].wage += getRate(e.name) * (e.day || 0);
-    } else {
-      monthsForSummary[m].expensesList.push({ amount: e.expenses || 0 });
-    }
+  Object.keys(months).forEach(function(m) {
+    monthsForSummary[m] = {
+      workers: months[m].workers,
+      expensesList: months[m].expensesList.map(function(ex) { return { amount: ex.amount }; })
+    };
   });
 
   grid.innerHTML = sorted.map(function(m) {
@@ -817,11 +821,11 @@ function populateMonthFilter() {
 
 // ── EXPORT ────────────────────────────────────────────────────
 window.exportCSV = function() {
-  const lines = [["Mitarbeiter","Datum","Typ","Details","Bemerkungen","Letzte Änderung"]];
+  const lines = [t.cols.slice(0,6)];
   entries.slice().sort(function(a,b) { return a.date.localeCompare(b.date); }).forEach(function(e) {
     const type    = e.type || (e.expenses > 0 ? "expense" : "work");
-    const typeLbl = type === "work" ? "Arbeitstag" : "Ausgaben";
-    const details = type === "work" ? (e.day + " Tag(e)") : (e.expenses + " " + CURRENCY);
+    const typeLbl = type === "work" ? t.btnWork.replace(/^\S+\s/,"") : t.btnExpense.replace(/^\S+\s/,"");
+    const details = type === "work" ? (e.day + " " + t.dayUnit) : fmtAmt(e.expenses);
     lines.push([e.name, e.date, typeLbl, details, e.notes || "", fmtDateTime(e.updatedAt || e.createdAt)]);
   });
   const csv  = lines.map(function(r) { return r.map(function(c) { return '"' + c + '"'; }).join(","); }).join("\n");
