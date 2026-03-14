@@ -25,8 +25,9 @@ const CURRENCY    = "DH";
 
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
-const entriesRef = collection(db, "entries");
-const ratesRef   = doc(db, "config", "rates");
+const entriesRef   = collection(db, "entries");
+const ratesRef     = doc(db, "config", "rates");
+const paymentsRef  = doc(db, "config", "payments");
 
 // ── ÜBERSETZUNGEN ─────────────────────────────────────────────
 const T = {
@@ -142,6 +143,7 @@ const T = {
 
 // ── STATE ─────────────────────────────────────────────────────
 let lang        = detectLang();
+let payments    = {};  // { "2026-03": { paid: true, paidDate: "2026-03-14" } }
 let t           = T[lang];
 let entries     = [];
 let rates       = { defaultRate: 200 };
@@ -276,6 +278,24 @@ async function loadRates() {
   } catch(e) { console.warn(e); }
 }
 async function saveRates() { await setDoc(ratesRef, rates); }
+
+async function loadPayments() {
+  try {
+    const snap = await getDoc(paymentsRef);
+    if (snap.exists()) payments = snap.data();
+  } catch(e) { console.warn(e); }
+}
+window.togglePayment = async function(monthKey) {
+  if (!isAdmin) return;
+  const cur = payments[monthKey] || { paid: false };
+  if (!cur.paid) {
+    payments[monthKey] = { paid: true, paidDate: today() };
+  } else {
+    payments[monthKey] = { paid: false, paidDate: null };
+  }
+  try { await setDoc(paymentsRef, payments); } catch(e) { console.error(e); }
+  window.renderMonthly();
+};
 
 function startListener() {
   onSnapshot(query(entriesRef, orderBy("updatedAt", "desc")), snap => {
@@ -539,35 +559,118 @@ function updateStats() {
 
 // ── MONTHLY ──────────────────────────────────────────────────
 window.renderMonthly = function() {
+  // Build per-month data
   const months = {};
   entries.forEach(function(e) {
-    const m = e.date.slice(0, 7);
-    if (!months[m]) months[m] = {};
-    if (!months[m][e.name]) months[m][e.name] = { days: 0, wage: 0, expenses: 0 };
-    months[m][e.name].days     += (e.day || 0);
-    months[m][e.name].wage     += getRate(e.name) * (e.day || 0);
-    months[m][e.name].expenses += (e.expenses || 0);
+    const m    = e.date.slice(0, 7);
+    const type = e.type || (e.expenses > 0 ? "expense" : "work");
+    if (!months[m]) months[m] = { workers: {}, expensesList: [], dates: [] };
+    months[m].dates.push(e.date);
+    if (type === "work") {
+      if (!months[m].workers[e.name]) months[m].workers[e.name] = { days: 0, wage: 0 };
+      months[m].workers[e.name].days += (e.day || 0);
+      months[m].workers[e.name].wage += getRate(e.name) * (e.day || 0);
+    } else {
+      months[m].expensesList.push({ name: e.name, amount: e.expenses || 0, notes: e.notes || "" });
+    }
   });
+
   const grid   = document.getElementById("monthlyGrid");
   const sorted = Object.keys(months).sort().reverse();
-  if (!sorted.length) { grid.innerHTML = '<p style="color:var(--text-muted);font-size:14px;">' + t.noData + '</p>'; return; }
+  if (!sorted.length) {
+    grid.innerHTML = '<p style="color:var(--text-muted);font-size:14px;padding:20px">' + t.noData + '</p>';
+    return;
+  }
+
   const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
+
   grid.innerHTML = sorted.map(function(m) {
-    const parts = m.split("-");
-    const label = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1).toLocaleDateString(locale, { month:"long", year:"numeric" });
-    const ws    = months[m];
-    const tWage = Object.values(ws).reduce(function(s, w) { return s + w.wage; }, 0);
-    const tDays = Object.values(ws).reduce(function(s, w) { return s + w.days; }, 0);
-    const tExp  = Object.values(ws).reduce(function(s, w) { return s + w.expenses; }, 0);
-    let rows = Object.entries(ws).map(function(kv) {
-      const n = kv[0], w = kv[1];
-      let r = '<div class="month-row"><span>' + n + '</span><span>' + w.days + t.dayUnit + ' · ' + w.wage.toFixed(0) + ' ' + CURRENCY + '</span></div>';
-      if (w.expenses > 0) r += '<div class="month-row" style="font-size:12px;color:var(--terracotta)"><span style="padding-inline-start:12px">🛒</span><span>' + w.expenses.toFixed(2) + ' ' + CURRENCY + '</span></div>';
-      return r;
-    }).join("");
-    rows += '<div class="month-row total"><span>∑ ' + tDays + t.dayUnit + '</span><span>' + tWage.toFixed(0) + ' ' + CURRENCY + '</span></div>';
-    if (tExp > 0) rows += '<div class="month-row total" style="color:var(--terracotta);border-top:none;padding-top:2px"><span>🛒</span><span>' + tExp.toFixed(2) + ' ' + CURRENCY + '</span></div>';
-    return '<div class="month-card"><h4>' + label + '</h4>' + rows + '</div>';
+    const data     = months[m];
+    const parts    = m.split("-");
+    const label    = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1)
+                       .toLocaleDateString(locale, { month:"long", year:"numeric" })
+                       .toUpperCase();
+
+    // Date range
+    const sortedDates = data.dates.slice().sort();
+    const dateFrom    = new Date(sortedDates[0] + "T00:00:00").toLocaleDateString(locale, {day:"2-digit",month:"2-digit",year:"numeric"});
+    const dateTo      = new Date(sortedDates[sortedDates.length-1] + "T00:00:00").toLocaleDateString(locale, {day:"2-digit",month:"2-digit",year:"numeric"});
+    const dateRange   = dateFrom === dateTo ? dateFrom : dateFrom + " – " + dateTo;
+
+    // Totals
+    const totalWage = Object.values(data.workers).reduce(function(s, w) { return s + w.wage; }, 0);
+    const totalDays = Object.values(data.workers).reduce(function(s, w) { return s + w.days; }, 0);
+    const totalExp  = data.expensesList.reduce(function(s, e) { return s + e.amount; }, 0);
+    const grandTotal = totalWage + totalExp;
+
+    // Payment status
+    const pmt     = payments[m] || { paid: false };
+    const isPaid  = pmt.paid;
+    const paidLbl = lang === "ar" ? "مدفوع" : lang === "fr" ? "Payé" : "Bezahlt";
+    const unpaidLbl = lang === "ar" ? "غير مدفوع" : lang === "fr" ? "Non payé" : "Nicht bezahlt";
+    const paidOnLbl = lang === "ar" ? "بتاريخ" : lang === "fr" ? "le" : "am";
+    const payBtnLbl = isPaid
+      ? (lang === "ar" ? "تحديد كغير مدفوع" : lang === "fr" ? "Marquer non payé" : "Als nicht bezahlt markieren")
+      : (lang === "ar" ? "تحديد كمدفوع" : lang === "fr" ? "Marquer comme payé" : "Als bezahlt markieren");
+
+    // Work rows
+    let workRows = "";
+    if (Object.keys(data.workers).length > 0) {
+      workRows += '<div class="mc-section-title">🌾 ' + (lang === "ar" ? "العمل" : lang === "fr" ? "Travail" : "Arbeit") + '</div>';
+      workRows += '<div class="mc-divider"></div>';
+      Object.entries(data.workers).forEach(function(kv) {
+        const n = kv[0], w = kv[1];
+        workRows += '<div class="mc-row">'
+          + '<span class="mc-name">' + n + '</span>'
+          + '<span class="mc-amount">' + w.wage.toFixed(0) + ' ' + CURRENCY + '</span>'
+          + '</div>';
+      });
+    }
+
+    // Expense rows
+    let expRows = "";
+    if (data.expensesList.length > 0) {
+      expRows += '<div class="mc-section-title mc-section-expense">🛒 ' + (lang === "ar" ? "المصاريف" : lang === "fr" ? "Dépenses" : "Ausgaben") + '</div>';
+      expRows += '<div class="mc-divider"></div>';
+      data.expensesList.forEach(function(ex) {
+        expRows += '<div class="mc-row">'
+          + '<span class="mc-name">' + ex.name + (ex.notes ? ' <span class="mc-note">(' + ex.notes + ')</span>' : '') + '</span>'
+          + '<span class="mc-amount mc-expense-amt">' + ex.amount.toFixed(0) + ' ' + CURRENCY + '</span>'
+          + '</div>';
+      });
+    }
+
+    // Total row
+    let totalRow = '<div class="mc-divider-heavy"></div>'
+      + '<div class="mc-row mc-total-row">'
+      + '<span>' + (lang === "ar" ? "الإجمالي" : lang === "fr" ? "Total" : "Gesamt") + '</span>'
+      + '<span class="mc-grand-total">' + grandTotal.toFixed(0) + ' ' + CURRENCY + '</span>'
+      + '</div>';
+
+    // Date range row
+    let dateRow = '<div class="mc-date-range">'
+      + (lang === "ar" ? "الفترة" : lang === "fr" ? "Période" : "Zeitraum") + ': ' + dateRange
+      + '</div>';
+
+    // Payment row
+    let payRow = '<div class="mc-payment ' + (isPaid ? 'mc-paid' : 'mc-unpaid') + '">'
+      + '<div class="mc-payment-status">'
+      + '<span class="mc-payment-dot ' + (isPaid ? 'dot-paid' : 'dot-unpaid') + '"></span>'
+      + '<span>' + (isPaid ? paidLbl + (pmt.paidDate ? ' · ' + paidOnLbl + ' ' + pmt.paidDate : '') : unpaidLbl) + '</span>'
+      + '</div>'
+      + (isAdmin
+          ? '<button class="mc-pay-btn" onclick="togglePayment(\'' + m + '\')">' + payBtnLbl + '</button>'
+          : (isPaid ? '' : '<span class="mc-pay-hint">' + (lang === "ar" ? "يرجى الدفع قريباً" : lang === "fr" ? "Paiement à prévoir" : "Bitte zeitnah zahlen") + '</span>'))
+      + '</div>';
+
+    return '<div class="month-card-new">'
+      + '<div class="mc-header"><h4>' + label + '</h4></div>'
+      + workRows
+      + expRows
+      + totalRow
+      + dateRow
+      + payRow
+      + '</div>';
   }).join("");
 };
 
@@ -644,6 +747,7 @@ async function initApp() {
   showLoading(t.loading);
   try {
     await loadRates();
+    await loadPayments();
     populateNameSelect();
     startListener();
     hideLoading();
@@ -792,10 +896,53 @@ td{padding:10px 14px;font-size:14px;vertical-align:middle}
 .btn-edit{background:transparent;border:1px solid var(--border);color:var(--green-mid);font-size:12px;padding:4px 10px}
 .btn-edit:hover{background:var(--green-mist)}
 
-.month-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:12px}
+/* ── MONTHLY OVERVIEW NEW ─────────────────────────── */
+.month-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+
+.month-card-new{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(26,58,42,.06)}
+
+.mc-header{background:var(--green-deep);padding:12px 18px}
+.mc-header h4{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:#fff;letter-spacing:.5px;margin:0}
+body.rtl .mc-header h4{font-family:'Noto Sans Arabic',sans-serif;letter-spacing:0}
+
+.mc-section-title{font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;padding:12px 18px 4px}
+body.rtl .mc-section-title{text-transform:none;letter-spacing:0}
+.mc-section-expense{color:var(--terracotta)}
+.mc-divider{height:1px;background:var(--border);margin:0 18px 4px}
+.mc-divider-heavy{height:1px;background:var(--green-light);margin:8px 18px}
+.mc-note{font-size:11px;color:var(--text-muted);font-weight:400}
+
+.mc-row{display:flex;justify-content:space-between;align-items:center;padding:6px 18px;font-size:14px;color:var(--text-dark)}
+.mc-row:hover{background:var(--green-mist)}
+.mc-name{font-weight:400;color:var(--text-mid)}
+.mc-amount{font-weight:500;color:var(--green-mid);font-size:14px}
+.mc-expense-amt{color:var(--terracotta)}
+
+.mc-total-row{padding:10px 18px;background:var(--green-mist)}
+.mc-total-row span:first-child{font-weight:500;color:var(--text-dark);font-size:14px}
+.mc-grand-total{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--green-deep)}
+body.rtl .mc-grand-total{font-family:'Noto Sans Arabic',sans-serif}
+
+.mc-date-range{font-size:12px;color:var(--text-muted);padding:8px 18px;border-top:1px solid var(--border);background:var(--sand)}
+
+.mc-payment{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;gap:10px;flex-wrap:wrap}
+.mc-paid{background:#f0fdf4;border-top:1px solid #bbf7d0}
+.mc-unpaid{background:#fff8f0;border-top:1px solid #fed7aa}
+.mc-payment-status{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500}
+.mc-paid .mc-payment-status{color:#166534}
+.mc-unpaid .mc-payment-status{color:#9a3412}
+.mc-payment-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot-paid{background:#22c55e}
+.dot-unpaid{background:#f97316;animation:blink 1.8s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.mc-pay-btn{border:none;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .18s;background:var(--green-mid);color:#fff}
+.mc-pay-btn:hover{background:var(--green-deep)}
+.mc-unpaid .mc-pay-btn{background:var(--amber);color:#fff}
+.mc-unpaid .mc-pay-btn:hover{background:#a86010}
+.mc-pay-hint{font-size:12px;color:#9a3412;font-style:italic}
+
+/* keep old classes for safety */
 .month-card{background:var(--green-mist);border:1px solid var(--border);border-radius:10px;padding:14px}
-.month-card h4{font-size:12px;font-weight:500;color:var(--green-deep);margin-bottom:9px;text-transform:uppercase;letter-spacing:.4px}
-body.rtl .month-card h4{text-transform:none;letter-spacing:0}
 .month-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:var(--text-mid)}
 .month-row.total{border-top:1px solid var(--border);margin-top:5px;padding-top:7px;font-weight:500;color:var(--text-dark)}
 
