@@ -39,7 +39,7 @@ const T = {
     tabs:["📋 Einträge","+ Neuer Eintrag","📊 Monatsübersicht"],
     filterName:"🔍 Name filtern...", allMonths:"Alle Monate",
     allTypes:"Alle Einträge", typeWork:"🌾 Arbeitstage", typeExpense:"🛒 Ausgaben",
-    cols:["Mitarbeiter","Datum","Typ","Details","Bemerkungen","Aktionen"],
+    cols:["Mitarbeiter","Datum","Typ","Details","Bemerkungen","Letzte Änderung","Aktionen"],
     noEntries:"Noch keine Einträge vorhanden.",
     exportLabel:"Exportieren:", btnCSV:"📄 CSV", btnPrint:"🖨 Drucken / PDF",
     labelName:"Name des Mitarbeiters *", labelDate:"Datum *",
@@ -75,7 +75,7 @@ const T = {
     tabs:["📋 Entrées","+ Nouvelle entrée","📊 Aperçu mensuel"],
     filterName:"🔍 Filtrer par nom...", allMonths:"Tous les mois",
     allTypes:"Toutes les entrées", typeWork:"🌾 Jours travaillés", typeExpense:"🛒 Dépenses",
-    cols:["Employé","Date","Type","Détails","Remarques","Actions"],
+    cols:["Employé","Date","Type","Détails","Remarques","Dernière modif.","Actions"],
     noEntries:"Aucune entrée pour le moment.",
     exportLabel:"Exporter:", btnCSV:"📄 CSV", btnPrint:"🖨 Imprimer / PDF",
     labelName:"Nom de l'employé *", labelDate:"Date *",
@@ -111,7 +111,7 @@ const T = {
     tabs:["📋 الإدخالات","+ إدخال جديد","📊 ملخص شهري"],
     filterName:"🔍 بحث بالاسم...", allMonths:"كل الأشهر",
     allTypes:"كل الإدخالات", typeWork:"🌾 أيام العمل", typeExpense:"🛒 المصاريف",
-    cols:["الموظف","التاريخ","النوع","التفاصيل","ملاحظات","إجراءات"],
+    cols:["الموظف","التاريخ","النوع","التفاصيل","ملاحظات","آخر تعديل","إجراءات"],
     noEntries:"لا توجد إدخالات بعد.",
     exportLabel:"تصدير:", btnCSV:"📄 CSV", btnPrint:"🖨 طباعة / PDF",
     labelName:"اسم الموظف *", labelDate:"التاريخ *",
@@ -253,6 +253,13 @@ function fmtDate(d) {
 }
 function fmtMoney(v) { return Number(v).toFixed(2) + " " + CURRENCY; }
 function fmtMoneyInt(v) { return Number(v).toFixed(0) + " " + CURRENCY; }
+function fmtDateTime(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
+  return d.toLocaleDateString(locale, {day:"2-digit",month:"2-digit",year:"numeric"})
+    + " " + d.toLocaleTimeString(locale, {hour:"2-digit",minute:"2-digit"});
+}
 
 function showLoading(msg) {
   document.getElementById("loadingText").textContent = msg;
@@ -384,6 +391,7 @@ window.toggleAdminMode = function() {
     document.getElementById("adminSection").classList.remove("visible");
     document.getElementById("adminBadge").classList.remove("visible");
     document.getElementById("adminToggleBtn").textContent = t.adminLogin;
+    renderTable();
     toast(t.toastLoggedOut);
   } else {
     document.getElementById("adminModal").classList.add("open");
@@ -401,6 +409,7 @@ window.checkPin = function() {
     document.getElementById("adminBadge").classList.add("visible");
     document.getElementById("adminToggleBtn").textContent = t.logout;
     renderRates();
+    renderTable();
     toast(t.toastLoggedIn);
   } else {
     document.getElementById("pinError").style.display = "block";
@@ -444,12 +453,6 @@ function renderRates() {
       + '<button onclick="deleteRate(\'' + name + '\')" class="rate-del">✕</button>'
       + '</div></div>';
   }).join("");
-  html += '<div class="rate-item">'
-    + '<span class="rate-name" style="color:var(--text-muted)">' + t.standard + '</span>'
-    + '<div class="rate-input-wrap">'
-    + '<input class="rate-input" type="number" value="' + (rates.defaultRate || 200) + '" min="0" step="1" onchange="updateRate(\'defaultRate\',this.value)">'
-    + '<span class="rate-currency">' + CURRENCY + '</span>'
-    + '</div></div>';
   grid.innerHTML = html;
 }
 
@@ -480,7 +483,7 @@ function renderTable() {
 
   const tbody = document.getElementById("tableBody");
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🌱</div><p>' + t.noEntries + '</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🌱</div><p>' + t.noEntries + '</p></div></td></tr>';
     return;
   }
 
@@ -581,12 +584,12 @@ function populateMonthFilter() {
 
 // ── EXPORT ────────────────────────────────────────────────────
 window.exportCSV = function() {
-  const lines = [["Mitarbeiter","Datum","Typ","Details","Bemerkungen"]];
+  const lines = [["Mitarbeiter","Datum","Typ","Details","Bemerkungen","Letzte Änderung"]];
   entries.slice().sort(function(a,b) { return a.date.localeCompare(b.date); }).forEach(function(e) {
     const type    = e.type || (e.expenses > 0 ? "expense" : "work");
     const typeLbl = type === "work" ? "Arbeitstag" : "Ausgaben";
     const details = type === "work" ? (e.day + " Tag(e)") : (e.expenses + " " + CURRENCY);
-    lines.push([e.name, e.date, typeLbl, details, e.notes || ""]);
+    lines.push([e.name, e.date, typeLbl, details, e.notes || "", fmtDateTime(e.updatedAt || e.createdAt)]);
   });
   const csv  = lines.map(function(r) { return r.map(function(c) { return '"' + c + '"'; }).join(","); }).join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -983,11 +986,12 @@ body.rtl .modal h2{font-family:'Noto Sans Arabic',sans-serif}
               <th>Typ</th>
               <th>Details</th>
               <th>Bemerkungen</th>
+              <th>Letzte Änderung</th>
               <th>Aktionen</th>
             </tr>
           </thead>
           <tbody id="tableBody">
-            <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🌱</div><p>Verbinde...</p></div></td></tr>
+            <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🌱</div><p>Verbinde...</p></div></td></tr>
           </tbody>
         </table>
       </div>
