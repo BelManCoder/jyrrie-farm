@@ -66,6 +66,10 @@ const T = {
     accessPrompt:"🔒 Bitte Zugangscode eingeben",
     accessBtn:"Zugang bestätigen →", accessError:"❌ Falscher Code. Bitte erneut versuchen.",
     accessFooter:"Nur für autorisierte Mitarbeiter",
+    mWork:"Arbeit", mExpenses:"Ausgaben", mTotal:"Gesamt", mPeriod:"Zeitraum",
+    mPaid:"Bezahlt", mUnpaid:"Nicht bezahlt", mPaidOn:"am",
+    mPayNow:"Bitte zeitnah zahlen", mMarkPaid:"Als bezahlt markieren",
+    mMarkUnpaid:"Als nicht bezahlt markieren",
   },
   fr: {
     title:"Jyrrie Farm", subtitle:"Gestion des employés",
@@ -102,6 +106,10 @@ const T = {
     accessPrompt:"🔒 Entrez le code d'accès",
     accessBtn:"Confirmer l'accès →", accessError:"❌ Code incorrect. Veuillez réessayer.",
     accessFooter:"Réservé aux employés autorisés",
+    mWork:"Travail", mExpenses:"Dépenses", mTotal:"Total", mPeriod:"Période",
+    mPaid:"Payé", mUnpaid:"Non payé", mPaidOn:"le",
+    mPayNow:"Paiement à prévoir", mMarkPaid:"Marquer comme payé",
+    mMarkUnpaid:"Marquer non payé",
   },
   ar: {
     title:"مزرعة جيري", subtitle:"إدارة الموظفين",
@@ -138,6 +146,10 @@ const T = {
     accessPrompt:"🔒 أدخل رمز الوصول",
     accessBtn:"تأكيد الدخول →", accessError:"❌ رمز خاطئ. حاول مرة أخرى.",
     accessFooter:"للموظفين المصرح لهم فقط",
+    mWork:"العمل", mExpenses:"المصاريف", mTotal:"الإجمالي", mPeriod:"الفترة",
+    mPaid:"مدفوع", mUnpaid:"غير مدفوع", mPaidOn:"بتاريخ",
+    mPayNow:"يرجى الدفع قريباً", mMarkPaid:"تحديد كمدفوع",
+    mMarkUnpaid:"تحديد كغير مدفوع",
   }
 };
 
@@ -172,10 +184,22 @@ function applyLang() {
   updateStats();
   populateNameSelect();
   populateMonthFilter();
+  if (document.getElementById("tab-monthly") && document.getElementById("tab-monthly").classList.contains("active")) {
+    window.renderMonthly();
+  }
   document.querySelectorAll(".lang-btn").forEach(b => b.classList.toggle("active", b.dataset.lang === lang));
   if (document.getElementById("adminSection").classList.contains("visible")) renderRates();
 }
 window.switchLang = function(l) { lang = l; applyLang(); };
+
+// Refresh whichever tab is currently visible
+function refreshCurrentTab() {
+  if (document.getElementById("tab-monthly") && document.getElementById("tab-monthly").classList.contains("active")) {
+    window.renderMonthly();
+  } else {
+    renderTable();
+  }
+}
 
 function updateAllText() {
   function s(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
@@ -413,7 +437,7 @@ window.toggleAdminMode = function() {
     document.getElementById("adminSection").classList.remove("visible");
     document.getElementById("adminBadge").classList.remove("visible");
     document.getElementById("adminToggleBtn").textContent = t.adminLogin;
-    renderTable();
+    refreshCurrentTab();
     toast(t.toastLoggedOut);
   } else {
     document.getElementById("adminModal").classList.add("open");
@@ -431,7 +455,7 @@ window.checkPin = function() {
     document.getElementById("adminBadge").classList.add("visible");
     document.getElementById("adminToggleBtn").textContent = t.logout;
     renderRates();
-    renderTable();
+    refreshCurrentTab();
     toast(t.toastLoggedIn);
   } else {
     document.getElementById("pinError").style.display = "block";
@@ -606,17 +630,17 @@ window.renderMonthly = function() {
     // Payment status
     const pmt     = payments[m] || { paid: false };
     const isPaid  = pmt.paid;
-    const paidLbl = lang === "ar" ? "مدفوع" : lang === "fr" ? "Payé" : "Bezahlt";
-    const unpaidLbl = lang === "ar" ? "غير مدفوع" : lang === "fr" ? "Non payé" : "Nicht bezahlt";
-    const paidOnLbl = lang === "ar" ? "بتاريخ" : lang === "fr" ? "le" : "am";
+    const paidLbl = t.mPaid;
+    const unpaidLbl = t.mUnpaid;
+    const paidOnLbl = t.mPaidOn;
     const payBtnLbl = isPaid
-      ? (lang === "ar" ? "تحديد كغير مدفوع" : lang === "fr" ? "Marquer non payé" : "Als nicht bezahlt markieren")
-      : (lang === "ar" ? "تحديد كمدفوع" : lang === "fr" ? "Marquer comme payé" : "Als bezahlt markieren");
+      ? (t.mMarkUnpaid)
+      : (t.mMarkPaid);
 
     // Work rows
     let workRows = "";
     if (Object.keys(data.workers).length > 0) {
-      workRows += '<div class="mc-section-title">🌾 ' + (lang === "ar" ? "العمل" : lang === "fr" ? "Travail" : "Arbeit") + '</div>';
+      workRows += '<div class="mc-section-title">🌾 ' + (t.mWork) + '</div>';
       workRows += '<div class="mc-divider"></div>';
       Object.entries(data.workers).forEach(function(kv) {
         const n = kv[0], w = kv[1];
@@ -630,7 +654,7 @@ window.renderMonthly = function() {
     // Expense rows
     let expRows = "";
     if (data.expensesList.length > 0) {
-      expRows += '<div class="mc-section-title mc-section-expense">🛒 ' + (lang === "ar" ? "المصاريف" : lang === "fr" ? "Dépenses" : "Ausgaben") + '</div>';
+      expRows += '<div class="mc-section-title mc-section-expense">🛒 ' + (t.mExpenses) + '</div>';
       expRows += '<div class="mc-divider"></div>';
       data.expensesList.forEach(function(ex) {
         expRows += '<div class="mc-row">'
@@ -643,13 +667,13 @@ window.renderMonthly = function() {
     // Total row
     let totalRow = '<div class="mc-divider-heavy"></div>'
       + '<div class="mc-row mc-total-row">'
-      + '<span>' + (lang === "ar" ? "الإجمالي" : lang === "fr" ? "Total" : "Gesamt") + '</span>'
+      + '<span>' + (t.mTotal) + '</span>'
       + '<span class="mc-grand-total">' + grandTotal.toFixed(0) + ' ' + CURRENCY + '</span>'
       + '</div>';
 
     // Date range row
     let dateRow = '<div class="mc-date-range">'
-      + (lang === "ar" ? "الفترة" : lang === "fr" ? "Période" : "Zeitraum") + ': ' + dateRange
+      + (t.mPeriod) + ': ' + dateRange
       + '</div>';
 
     // Payment row
@@ -660,7 +684,7 @@ window.renderMonthly = function() {
       + '</div>'
       + (isAdmin
           ? '<button class="mc-pay-btn" onclick="togglePayment(\'' + m + '\')">' + payBtnLbl + '</button>'
-          : (isPaid ? '' : '<span class="mc-pay-hint">' + (lang === "ar" ? "يرجى الدفع قريباً" : lang === "fr" ? "Paiement à prévoir" : "Bitte zeitnah zahlen") + '</span>'))
+          : (isPaid ? '' : '<span class="mc-pay-hint">' + (t.mPayNow) + '</span>'))
       + '</div>';
 
     return '<div class="month-card-new">'
