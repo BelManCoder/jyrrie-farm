@@ -923,7 +923,7 @@ body.rtl{font-family:'Noto Sans Arabic','DM Sans',sans-serif}
 
 header{background:var(--green-deep);position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.25)}
 .header-inner{max-width:1100px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.logo{display:flex;align-items:center;gap:12px}
+.logo{display:flex;align-items:center;gap:12px;transition:opacity .2s}.logo:hover{opacity:.8}.logo:active{opacity:.6}
 .logo-icon{width:38px;height:38px;background:var(--green-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px}
 .logo-text h1{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700}
 body.rtl .logo-text h1{font-family:'Noto Sans Arabic',sans-serif}
@@ -1363,7 +1363,7 @@ body.rtl .ys-amt{text-align:left}
 
 <header>
   <div class="header-inner">
-    <div class="logo">
+    <div class="logo" onclick="showTabMobile('entries')" style="cursor:pointer;" title="Zur Startseite">
       <div class="logo-icon">🌿</div>
       <div class="logo-text">
         <h1 id="appTitle">Jyrrie Farm</h1>
