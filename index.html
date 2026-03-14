@@ -278,7 +278,7 @@ async function loadRates() {
 async function saveRates() { await setDoc(ratesRef, rates); }
 
 function startListener() {
-  onSnapshot(query(entriesRef, orderBy("date", "desc")), snap => {
+  onSnapshot(query(entriesRef, orderBy("updatedAt", "desc")), snap => {
     entries = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
     renderTable();
     updateStats();
@@ -329,6 +329,7 @@ async function saveEntry() {
       toast(t.toastUpdated);
     } else {
       payload.createdAt = Date.now();
+      payload.updatedAt = Date.now();
       await addDoc(entriesRef, payload);
       toast(t.toastSaved);
     }
@@ -363,6 +364,7 @@ window.clearForm = function() {
 };
 
 window.editEntry = function(id) {
+  if (!isAdmin) { return; }
   const e = entries.find(x => x.id === id);
   if (!e) return;
   editingId = id;
@@ -500,6 +502,9 @@ function renderTable() {
       ? '<span class="day-badge ' + (e.day === 1 ? "day-full" : "day-half") + '">' + (e.day === 1 ? t.fullBadge : t.halfBadge) + " · " + rate + " " + CURRENCY + t.perDay + '</span>'
       : '<strong>' + fmtMoney(e.expenses) + '</strong>';
 
+    const editBtn = isAdmin
+      ? '<button class="btn btn-edit" onclick="editEntry(\'' + e.id + '\')">✏</button>'
+      : "";
     const delBtn = isAdmin
       ? '<button class="btn btn-danger" onclick="deleteEntry(\'' + e.id + '\')">🗑</button>'
       : "";
@@ -512,7 +517,7 @@ function renderTable() {
       + '<td class="td-note">' + (e.notes || "—") + '</td>'
       + '<td style="font-size:12px;color:var(--text-muted);white-space:nowrap">' + fmtDateTime(e.updatedAt || e.createdAt) + '</td>'
       + '<td><div class="td-actions">'
-      + '<button class="btn btn-edit" onclick="editEntry(\'' + e.id + '\')">✏</button>'
+      + editBtn
       + delBtn
       + '</div></td>'
       + '</tr>';
