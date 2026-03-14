@@ -570,79 +570,25 @@ function renderTable() {
       ? '<button class="btn btn-danger" onclick="deleteEntry(\'' + e.id + '\')">🗑</button>'
       : "";
 
-    const rowBg = idx % 2 === 0 ? '' : ' style="background:var(--sand)"';
+    const colName   = t.cols[0] || "Mitarbeiter";
+    const colDate   = t.cols[1] || "Datum";
+    const colType   = t.cols[2] || "Typ";
+    const colDetail = t.cols[3] || "Details";
+    const colNotes  = t.cols[4] || "Bemerkungen";
+    const colChg    = t.cols[5] || "Letzte Änderung";
+    const rowBg = idx % 2 === 0 ? '' : ' class="odd-row"';
     return '<tr' + rowBg + '>'
-      + '<td class="td-name">' + e.name + '</td>'
-      + '<td>' + fmtDate(e.date) + '</td>'
-      + '<td>' + typeBadge + '</td>'
-      + '<td>' + details + '</td>'
-      + '<td class="td-note">' + (e.notes || "—") + '</td>'
-      + '<td style="font-size:12px;color:var(--text-muted);white-space:nowrap">' + fmtDateTime(e.updatedAt || e.createdAt) + '</td>'
-      + (isAdmin ? '<td><div class="td-actions">' + editBtn + delBtn + '</div></td>' : '')
+      + '<td data-label="' + colName   + '" class="td-name">' + e.name + '</td>'
+      + '<td data-label="' + colDate   + '">' + fmtDate(e.date) + '</td>'
+      + '<td data-label="' + colType   + '">' + typeBadge + '</td>'
+      + '<td data-label="' + colDetail + '">' + details + '</td>'
+      + '<td data-label="' + colNotes  + '" class="td-note">' + (e.notes || "—") + '</td>'
+      + '<td data-label="' + colChg    + '" class="td-ts">' + fmtDateTime(e.updatedAt || e.createdAt) + '</td>'
+      + (isAdmin ? '<td class="td-act"><div class="td-actions">' + editBtn + delBtn + '</div></td>' : '')
       + '</tr>';
   }).join("");
-  // Also update mobile card view
-  if (typeof renderMobileCards === "function") renderMobileCards();
 }
 window.renderTable = renderTable;
-// ── MOBILE CARDS ──────────────────────────────────
-function renderMobileCards() {
-  const mc = document.getElementById("mobileCards");
-  if (!mc) return;
-  const fName  = (document.getElementById("filterName") ? document.getElementById("filterName").value : "").toLowerCase();
-  const fMonth = document.getElementById("filterMonth") ? document.getElementById("filterMonth").value : "";
-  const fType  = document.getElementById("filterType")  ? document.getElementById("filterType").value  : "";
-
-  const filtered = entries.filter(function(e) {
-    const type = e.type || (e.expenses > 0 ? "expense" : "work");
-    return (!fName  || e.name.toLowerCase().indexOf(fName) !== -1)
-        && (!fMonth || e.date.indexOf(fMonth) === 0)
-        && (!fType  || type === fType);
-  });
-
-  if (!filtered.length) {
-    mc.innerHTML = '<div class="empty-state" style="padding:40px 20px"><div class="empty-icon">🌱</div><p>' + t.noEntries + '</p></div>';
-    return;
-  }
-
-  mc.innerHTML = filtered.map(function(e, idx) {
-    const type   = e.type || (e.expenses > 0 ? "expense" : "work");
-    const isWork = type === "work";
-    const rate   = getRate(e.name);
-
-    const typeBadge = isWork
-      ? '<span class="day-badge day-full">🌾 ' + (lang==="ar"?"عمل":lang==="fr"?"Travail":"Arbeitstag") + '</span>'
-      : '<span class="day-badge day-expense">🛒 ' + (lang==="ar"?"مصاريف":lang==="fr"?"Dépense":"Ausgaben") + '</span>';
-
-    const detail = isWork
-      ? '<span class="day-badge ' + (e.day===1?"day-full":"day-half") + '">' + (e.day===1?t.fullBadge:t.halfBadge) + '</span>'
-        + ' <span style="font-size:13px;color:var(--text-muted)">' + rate + ' ' + CURRENCY + t.perDay + '</span>'
-      : '<strong style="font-size:15px;color:var(--terracotta)">' + fmtAmt(e.expenses) + '</strong>';
-
-    const adminBtns = isAdmin
-      ? '<div class="mc-entry-actions">'
-        + '<button class="mc-entry-btn mc-entry-edit" onclick="editEntry(\'' + e.id + '\')">✏</button>'
-        + '<button class="mc-entry-btn mc-entry-del" onclick="deleteEntry(\'' + e.id + '\')">🗑</button>'
-        + '</div>'
-      : '';
-
-    return '<div class="mc-entry-card' + (idx%2===1?" odd-row":"") + '">'
-      + '<div class="mc-entry-header">'
-      + '<span class="mc-entry-name">' + e.name + '</span>'
-      + '<span class="mc-entry-date">' + fmtDate(e.date) + '</span>'
-      + '</div>'
-      + '<div class="mc-entry-body">'
-      + '<div class="mc-entry-detail">' + typeBadge + ' ' + detail + '</div>'
-      + '</div>'
-      + (e.notes ? '<div class="mc-entry-notes">' + e.notes + '</div>' : '')
-      + '<div class="mc-entry-footer">'
-      + '<span class="mc-entry-ts">' + fmtDateTime(e.updatedAt || e.createdAt) + '</span>'
-      + adminBtns
-      + '</div>'
-      + '</div>';
-  }).join("");
-}
-
 // ── STATS ─────────────────────────────────────────────────────
 function updateStats() {
   const m   = new Date().toISOString().slice(0, 7);
@@ -1162,29 +1108,10 @@ body.rtl .ys-amt{text-align:left}
 .ys-unpaid-row{background:rgba(249,115,22,.05);border-radius:8px;padding:7px 10px!important;margin-bottom:4px}
 .ys-combined{justify-content:space-between;padding:8px 10px!important;border-top:1px dashed var(--border);background:var(--green-mist);border-radius:8px;margin-top:4px}
 
-/* ── MOBILE ENTRY CARDS ─────────────────────────── */
-.mobile-cards{display:none;padding:0}
-.mc-entry-card{background:var(--white);border:1px solid var(--border);border-radius:12px;margin:0 12px 10px;overflow:hidden;transition:box-shadow .2s}
-.mc-entry-card:active{box-shadow:0 0 0 2px var(--green-light)}
-.mc-entry-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;gap:8px}
-.mc-entry-name{font-weight:500;font-size:15px;color:var(--text-dark)}
-.mc-entry-date{font-size:12px;color:var(--text-muted)}
-.mc-entry-body{padding:0 14px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.mc-entry-detail{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.mc-entry-notes{font-size:12px;color:var(--text-muted);padding:0 14px 10px;border-top:1px solid var(--sand-dark);padding-top:8px;font-style:italic}
-.mc-entry-footer{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--sand);border-top:1px solid var(--sand-dark)}
-.mc-entry-ts{font-size:11px;color:var(--text-muted)}
-.mc-entry-actions{display:flex;gap:6px}
-.mc-entry-btn{border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .18s}
-.mc-entry-edit{background:var(--green-mist);color:var(--green-deep);border:1px solid var(--border)}
-.mc-entry-del{background:#fff1f0;color:var(--terracotta);border:1px solid #fca5a5}
-.mc-entry-card.odd-row{background:var(--sand)}
+
 
 /* ── BOTTOM NAVIGATION BAR (phones only) ────────── */
-@media(max-width:768px){
-  .mobile-cards{display:block}
-  .bottom-nav{display:flex}
-}
+
 @media(min-width:769px){
   .bottom-nav{display:none!important}
 }
@@ -1206,104 +1133,182 @@ body.rtl .ys-amt{text-align:left}
    lg:  769px+ (desktop)
 ═══════════════════════════════════════════════════ */
 
-/* ── Touch targets: min 44px on mobile ── */
+/* ═══════════════════════════════════════════════════
+   MOBILE-FIRST responsive design
+   Base: phones (≤768px) — table becomes card stack
+   Desktop (≥769px) — normal table layout
+═══════════════════════════════════════════════════ */
+
 @media(max-width:768px){
   /* Layout */
-  main{padding:12px 12px 100px}
+  main{padding:10px 10px 90px}
 
-  /* Header: compact single row */
-  .header-inner{padding:10px 14px;gap:8px}
-  .logo-icon{width:32px;height:32px;font-size:16px}
-  .logo-text h1{font-size:15px}
-  .logo-text p{display:none}
-  .live-label{display:none}
-  .lang-btn{padding:5px 8px;font-size:11px}
-  .btn-header{padding:7px 12px;font-size:12px}
+  /* Header */
+  .header-inner{padding:9px 12px;gap:6px}
+  .logo-icon{width:30px;height:30px;font-size:15px}
+  .logo-text h1{font-size:14px}
+  .logo-text p,.live-label{display:none}
+  .lang-btn{padding:5px 7px;font-size:11px}
+  .btn-header{padding:6px 11px;font-size:12px}
+  .admin-badge{font-size:10px;padding:3px 8px}
 
-  /* Stats: 2x2 grid on phone */
-  .stats-grid{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
-  .stat-card{padding:12px 13px}
-  .stat-label{font-size:10px;letter-spacing:.3px}
-  .stat-value{font-size:20px}
+  /* Stats 2x2 */
+  .stats-grid{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .stat-card{padding:11px 12px}
+  .stat-label{font-size:10px;letter-spacing:.2px}
+  .stat-value{font-size:19px}
   .stat-sub{font-size:10px}
 
-  /* Admin section: stacked */
-  .admin-section{padding:14px}
-  .rates-grid{grid-template-columns:1fr}
-  .rate-item{padding:12px 14px}
-  .rate-name{font-size:15px}
-  .rate-input{width:90px;font-size:15px;padding:6px 10px}
-
-  /* Panel: remove border-radius on phone edges */
-  .panel{border-radius:12px;margin-bottom:12px}
-
-  /* Tabs: equal width, larger touch targets */
-  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-  .tabs::-webkit-scrollbar{display:none}
-  .tab{flex:1;text-align:center;padding:13px 10px;font-size:13px;white-space:nowrap}
-
-  /* Form: single column, larger inputs */
-  .panel-body{padding:16px 14px}
-  .form-grid{grid-template-columns:1fr;gap:12px}
-  .form-group input,
-  .form-group select,
-  .form-group textarea{padding:13px 14px;font-size:16px;border-radius:10px}
-  .form-group label{font-size:13px}
-  .form-group textarea{min-height:70px}
-
-  /* Type buttons: full width stacked */
-  .type-btns{flex-direction:column;gap:10px}
-  .type-btn{width:100%;padding:14px 18px;font-size:15px;border-radius:12px;text-align:center}
-
-  /* Form actions: full width button */
-  .form-actions{flex-direction:column-reverse;gap:10px;margin-top:16px}
-  body.rtl .form-actions{flex-direction:column-reverse}
-  .form-actions .btn{width:100%;padding:14px;font-size:15px;border-radius:12px;text-align:center}
-
-  /* Entries table → mobile card list */
-  .filter-bar{padding:10px 14px;gap:8px}
-  .filter-bar input{width:100%;flex:1}
-  .filter-bar select{flex:1;min-width:0}
-
-  /* Hide desktop table, show mobile cards */
-  .table-wrap{display:none}
-  .mobile-cards{display:block}
-
-  /* Export bar */
-  .export-bar{padding:10px 14px;gap:8px;justify-content:center}
-  .btn-export{padding:10px 16px;font-size:13px;flex:1;text-align:center}
-
-  /* Monthly grid: single column */
-  .month-grid{grid-template-columns:1fr;gap:14px}
-  .mc-header h4{font-size:14px}
-  .mc-row{padding:8px 16px;font-size:14px}
-  .mc-section-title{padding:10px 16px 4px;font-size:11px}
-  .mc-divider{margin:0 16px 4px}
-  .mc-divider-heavy{margin:8px 16px}
-  .mc-total-row{padding:12px 16px}
-  .mc-grand-total{font-size:22px}
-  .mc-date-range{padding:8px 16px;font-size:12px}
-  .mc-payment{padding:12px 16px;gap:10px}
-  .mc-pay-btn{padding:10px 16px;font-size:13px;border-radius:10px}
-
-  /* Yearly summary */
-  .ys-year-block{padding:14px 16px}
-  .ys-row{padding:8px 0;font-size:14px}
-  .ys-paid-row,.ys-unpaid-row{padding:10px 12px!important}
-
-  /* Modal: full screen on phone */
-  .modal-overlay{padding:0;align-items:flex-end}
-  .modal{border-radius:20px 20px 0 0;padding:28px 24px 36px;max-width:100%;width:100%;box-shadow:0 -8px 40px rgba(0,0,0,.3)}
-  .modal-actions{gap:10px}
-  .modal-actions .btn{flex:1;padding:13px;font-size:15px}
-
-  /* Toast: above bottom nav */
-  .toast{bottom:80px;inset-inline-end:16px;inset-inline-start:16px;text-align:center;border-radius:12px}
-
-  /* Admin section add-rate row */
+  /* Admin */
+  .admin-section{padding:12px}
+  .rates-grid{grid-template-columns:1fr 1fr}
+  .rate-item{padding:10px 12px}
   .admin-add-row{flex-direction:column!important;align-items:stretch!important}
   .admin-add-row input{width:100%!important}
   .admin-add-row button{width:100%}
+
+  /* Panel */
+  .panel{border-radius:10px;margin-bottom:10px}
+  .tabs{overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:1;text-align:center;padding:12px 8px;font-size:13px;white-space:nowrap}
+  .panel-body{padding:14px 12px}
+
+  /* Form */
+  .form-grid{grid-template-columns:1fr;gap:11px}
+  .form-group label{font-size:13px}
+  .form-group input,
+  .form-group select,
+  .form-group textarea{padding:13px 14px;font-size:16px;border-radius:10px}
+  .form-group textarea{min-height:65px}
+  .type-select-row p{font-size:13px}
+  .type-btns{flex-direction:column;gap:9px}
+  .type-btn{width:100%;padding:14px 16px;font-size:15px;border-radius:12px}
+  .form-actions{flex-direction:column-reverse;gap:9px;margin-top:14px}
+  body.rtl .form-actions{flex-direction:column-reverse}
+  .form-actions .btn{width:100%;padding:14px;font-size:15px;border-radius:12px;justify-content:center}
+
+  /* Filter bar */
+  .filter-bar{padding:10px 12px;gap:8px;flex-wrap:wrap}
+  .filter-bar input{flex:1;min-width:120px}
+  .filter-bar select{flex:1;min-width:100px}
+
+  /* ── RESPONSIVE TABLE → CARD STACK ───────────────
+     Each row becomes a card. thead is hidden.
+     data-label shows as left-side label per row.
+  ────────────────────────────────────────────────── */
+  .table-wrap{overflow-x:visible}
+  table{min-width:unset;width:100%}
+  thead{display:none}
+  tbody tr{
+    display:block;
+    background:var(--white);
+    border:1px solid var(--border);
+    border-radius:12px;
+    margin:0 2px 10px;
+    padding:4px 0;
+    box-shadow:0 1px 4px rgba(26,58,42,.06);
+  }
+  tbody tr.odd-row{background:var(--green-mist)}
+  tbody tr:hover{background:var(--white)}
+  tbody tr.odd-row:hover{background:var(--green-mist)}
+  td{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:9px 14px;
+    font-size:14px;
+    border-bottom:1px solid var(--sand-dark);
+    text-align:right;
+  }
+  body.rtl td{text-align:left}
+  td:last-child{border-bottom:none}
+  td::before{
+    content:attr(data-label);
+    font-size:11px;
+    font-weight:500;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    text-align:left;
+    flex-shrink:0;
+    margin-inline-end:10px;
+  }
+  body.rtl td::before{text-align:right;margin-inline-end:0;margin-inline-start:10px}
+  td.td-name{
+    background:var(--green-deep);
+    border-radius:10px 10px 0 0;
+    color:#fff;
+    font-size:15px;
+    font-weight:500;
+    padding:11px 14px;
+  }
+  td.td-name::before{color:rgba(255,255,255,.6);text-transform:none;font-size:12px}
+  td.td-note{font-size:13px}
+  td.td-ts{font-size:11px}
+  td.td-act{border-bottom:none;justify-content:flex-end;padding:8px 12px;background:var(--sand);border-radius:0 0 10px 10px}
+  td.td-act::before{display:none}
+  .td-actions{gap:8px}
+  .btn-edit,.btn-danger{padding:8px 16px;font-size:13px;border-radius:8px}
+
+  /* Export */
+  .export-bar{padding:10px 12px;gap:8px;justify-content:stretch}
+  .btn-export{padding:10px 14px;font-size:13px;flex:1;text-align:center}
+
+  /* Monthly */
+  .month-grid{grid-template-columns:1fr;gap:12px}
+  .mc-header{padding:12px 16px}
+  .mc-header h4{font-size:14px}
+  .mc-row{padding:8px 16px;font-size:14px}
+  .mc-section-title{padding:10px 16px 4px}
+  .mc-divider,.mc-divider-heavy{margin-left:16px;margin-right:16px}
+  .mc-total-row{padding:12px 16px}
+  .mc-grand-total{font-size:21px}
+  .mc-date-range,.mc-payment{padding:10px 16px}
+  .mc-pay-btn{padding:9px 14px;font-size:13px}
+
+  /* Yearly */
+  .ys-year-block{padding:12px 16px}
+  .ys-row{font-size:14px}
+
+  /* Modal: slide up from bottom */
+  .modal-overlay{padding:0;align-items:flex-end}
+  .modal{border-radius:20px 20px 0 0;padding:28px 22px 36px;max-width:100%;width:100%;box-shadow:0 -8px 40px rgba(0,0,0,.25)}
+  .modal-actions .btn{flex:1;padding:13px;font-size:15px}
+
+  /* Toast above bottom nav */
+  .toast{bottom:75px;inset-inline-end:12px;inset-inline-start:12px;text-align:center;border-radius:12px;font-size:13px}
+}
+
+/* ── Small phones ── */
+@media(max-width:380px){
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .stat-value{font-size:17px}
+  .lang-btn{padding:4px 6px;font-size:10px}
+  .tab{font-size:12px;padding:11px 6px}
+  .rates-grid{grid-template-columns:1fr}
+}
+
+/* ── Desktop ≥769px ── */
+@media(min-width:769px){
+  .bottom-nav{display:none!important}
+  main{padding:24px 16px 60px}
+  thead{display:table-header-group}
+  tbody tr{display:table-row;border:none;border-radius:0;box-shadow:none;margin:0;padding:0}
+  td{display:table-cell;border-bottom:none;text-align:left;padding:10px 14px}
+  body.rtl td{text-align:right}
+  td::before{display:none}
+  td.td-name{background:transparent;border-radius:0;color:var(--text-dark);font-size:14px;padding:10px 14px}
+  td.td-name::before{display:none}
+  td.td-act{background:transparent;border-radius:0;padding:10px 14px;justify-content:flex-start}
+  td.td-act::before{display:none}
+  .table-wrap{overflow-x:auto}
+  table{min-width:600px}
+  .form-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+  .type-btns{flex-direction:row}
+  .type-btn{width:auto}
+  .form-actions{flex-direction:row;justify-content:flex-end}
+  .form-actions .btn{width:auto}
 }
 
 /* ── Small phones (≤380px) ── */
@@ -1316,8 +1321,6 @@ body.rtl .ys-amt{text-align:left}
 
 /* ── Desktop (≥769px): original layout ── */
 @media(min-width:769px){
-  .mobile-cards{display:none}
-  .table-wrap{display:block}
   .form-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
   .type-btns{flex-direction:row}
   .type-btn{width:auto}
@@ -1508,8 +1511,6 @@ body.rtl .ys-amt{text-align:left}
           </tbody>
         </table>
       </div>
-      <!-- Mobile card list (shown on phones) -->
-      <div class="mobile-cards" id="mobileCards"></div>
       <div class="export-bar">
         <span id="exportLabel">Exportieren:</span>
         <button id="btnCSV" class="btn-export" onclick="exportCSV()">📄 CSV</button>
