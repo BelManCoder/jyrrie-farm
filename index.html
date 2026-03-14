@@ -184,6 +184,7 @@ function applyLang() {
   localStorage.setItem("jyrrie_lang", lang);
   updateAllText();
   renderTable();
+  renderMobileCards();
   updateStats();
   populateNameSelect();
   populateMonthFilter();
@@ -201,6 +202,7 @@ function refreshCurrentTab() {
     window.renderMonthly();
   } else {
     renderTable();
+    renderMobileCards();
   }
 }
 
@@ -265,6 +267,9 @@ function updateAllText() {
   s("accessPromptText", t.accessPrompt);
   s("accessBtnText", t.accessBtn);
   s("accessFooterText", t.accessFooter);
+  // Bottom nav labels
+  s("bn-lbl-entries", t.tabs[0] ? t.tabs[0].replace(/^[^\w؀-ۿ]+/, "") : "");
+  s("bn-lbl-monthly", t.tabs[2] ? t.tabs[2].replace(/^[^\w؀-ۿ]+/, "") : "");
 }
 
 // ── UTILITIES ────────────────────────────────────────────────
@@ -579,7 +584,68 @@ function renderTable() {
       + '</tr>';
   }).join("");
 }
-window.renderTable = renderTable;
+window.renderTable = function() {
+  renderTable();
+  renderMobileCards();
+};
+
+// ── MOBILE CARDS ──────────────────────────────────
+function renderMobileCards() {
+  const mc = document.getElementById("mobileCards");
+  if (!mc) return;
+  const fName  = (document.getElementById("filterName") ? document.getElementById("filterName").value : "").toLowerCase();
+  const fMonth = document.getElementById("filterMonth") ? document.getElementById("filterMonth").value : "";
+  const fType  = document.getElementById("filterType")  ? document.getElementById("filterType").value  : "";
+
+  const filtered = entries.filter(function(e) {
+    const type = e.type || (e.expenses > 0 ? "expense" : "work");
+    return (!fName  || e.name.toLowerCase().indexOf(fName) !== -1)
+        && (!fMonth || e.date.indexOf(fMonth) === 0)
+        && (!fType  || type === fType);
+  });
+
+  if (!filtered.length) {
+    mc.innerHTML = '<div class="empty-state" style="padding:40px 20px"><div class="empty-icon">🌱</div><p>' + t.noEntries + '</p></div>';
+    return;
+  }
+
+  mc.innerHTML = filtered.map(function(e, idx) {
+    const type   = e.type || (e.expenses > 0 ? "expense" : "work");
+    const isWork = type === "work";
+    const rate   = getRate(e.name);
+
+    const typeBadge = isWork
+      ? '<span class="day-badge day-full">🌾 ' + (lang==="ar"?"عمل":lang==="fr"?"Travail":"Arbeitstag") + '</span>'
+      : '<span class="day-badge day-expense">🛒 ' + (lang==="ar"?"مصاريف":lang==="fr"?"Dépense":"Ausgaben") + '</span>';
+
+    const detail = isWork
+      ? '<span class="day-badge ' + (e.day===1?"day-full":"day-half") + '">' + (e.day===1?t.fullBadge:t.halfBadge) + '</span>'
+        + ' <span style="font-size:13px;color:var(--text-muted)">' + rate + ' ' + CURRENCY + t.perDay + '</span>'
+      : '<strong style="font-size:15px;color:var(--terracotta)">' + fmtAmt(e.expenses) + '</strong>';
+
+    const adminBtns = isAdmin
+      ? '<div class="mc-entry-actions">'
+        + '<button class="mc-entry-btn mc-entry-edit" onclick="editEntry(\'' + e.id + '\')">✏</button>'
+        + '<button class="mc-entry-btn mc-entry-del" onclick="deleteEntry(\'' + e.id + '\')">🗑</button>'
+        + '</div>'
+      : '';
+
+    return '<div class="mc-entry-card' + (idx%2===1?" odd-row":"") + '">'
+      + '<div class="mc-entry-header">'
+      + '<span class="mc-entry-name">' + e.name + '</span>'
+      + '<span class="mc-entry-date">' + fmtDate(e.date) + '</span>'
+      + '</div>'
+      + '<div class="mc-entry-body">'
+      + '<div class="mc-entry-detail">' + typeBadge + ' ' + detail + '</div>'
+      + '</div>'
+      + (e.notes ? '<div class="mc-entry-notes">' + e.notes + '</div>' : '')
+      + '<div class="mc-entry-footer">'
+      + '<span class="mc-entry-ts">' + fmtDateTime(e.updatedAt || e.createdAt) + '</span>'
+      + adminBtns
+      + '</div>'
+      + '</div>';
+  }).join("");
+}
 
 // ── STATS ─────────────────────────────────────────────────────
 function updateStats() {
@@ -825,6 +891,16 @@ window.exportCSV = function() {
 window.exportPrint = function() { window.print(); };
 
 // ── TABS ──────────────────────────────────────────────────────
+// ── BOTTOM NAV SYNC ──────────────────────────────────────────
+window.showTabMobile = function(name) {
+  window.showTab(name);
+  document.querySelectorAll(".bn-btn").forEach(function(b) { b.classList.remove("active"); });
+  const active = document.getElementById("bn-" + name);
+  if (active) active.classList.add("active");
+  // Scroll to top when switching tabs on mobile
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
 window.showTab = function(name) {
   document.querySelectorAll(".tab-content").forEach(function(el) { el.classList.remove("active"); });
   document.querySelectorAll(".tab").forEach(function(el) { el.classList.remove("active"); });
@@ -833,7 +909,7 @@ window.showTab = function(name) {
   const tab = document.querySelector('.tab[data-tab="' + name + '"]');
   if (tab) tab.classList.add("active");
   if (name === "monthly") window.renderMonthly();
-  if (name === "entries") renderTable();
+  if (name === "entries") { renderTable(); renderMobileCards(); }
 };
 
 // ── ACCESS CODE ───────────────────────────────────────────────
@@ -1090,15 +1166,168 @@ body.rtl .ys-amt{text-align:left}
 .ys-unpaid-row{background:rgba(249,115,22,.05);border-radius:8px;padding:7px 10px!important;margin-bottom:4px}
 .ys-combined{justify-content:space-between;padding:8px 10px!important;border-top:1px dashed var(--border);background:var(--green-mist);border-radius:8px;margin-top:4px}
 
+/* ── MOBILE ENTRY CARDS ─────────────────────────── */
+.mobile-cards{display:none;padding:0}
+.mc-entry-card{background:var(--white);border:1px solid var(--border);border-radius:12px;margin:0 12px 10px;overflow:hidden;transition:box-shadow .2s}
+.mc-entry-card:active{box-shadow:0 0 0 2px var(--green-light)}
+.mc-entry-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;gap:8px}
+.mc-entry-name{font-weight:500;font-size:15px;color:var(--text-dark)}
+.mc-entry-date{font-size:12px;color:var(--text-muted)}
+.mc-entry-body{padding:0 14px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mc-entry-detail{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mc-entry-notes{font-size:12px;color:var(--text-muted);padding:0 14px 10px;border-top:1px solid var(--sand-dark);padding-top:8px;font-style:italic}
+.mc-entry-footer{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--sand);border-top:1px solid var(--sand-dark)}
+.mc-entry-ts{font-size:11px;color:var(--text-muted)}
+.mc-entry-actions{display:flex;gap:6px}
+.mc-entry-btn{border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .18s}
+.mc-entry-edit{background:var(--green-mist);color:var(--green-deep);border:1px solid var(--border)}
+.mc-entry-del{background:#fff1f0;color:var(--terracotta);border:1px solid #fca5a5}
+.mc-entry-card.odd-row{background:var(--sand)}
+
+/* ── BOTTOM NAVIGATION BAR (phones only) ────────── */
+@media(max-width:768px){
+  .mobile-cards{display:block}
+  .bottom-nav{display:flex}
+}
+@media(min-width:769px){
+  .bottom-nav{display:none!important}
+}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:1px solid var(--border);z-index:200;justify-content:space-around;align-items:center;padding:8px 0 max(8px,env(safe-area-inset-bottom));box-shadow:0 -4px 16px rgba(0,0,0,.08)}
+.bn-btn{display:flex;flex-direction:column;align-items:center;gap:3px;border:none;background:transparent;color:var(--text-muted);font-size:10px;font-weight:500;padding:4px 16px;cursor:pointer;font-family:inherit;transition:color .18s;min-width:60px}
+.bn-btn.active{color:var(--green-deep)}
+.bn-icon{font-size:20px;line-height:1}
+.bn-add{background:var(--green-mid);color:#fff!important;border-radius:50%;width:52px;height:52px;margin-top:-20px;box-shadow:0 4px 14px rgba(45,90,61,.4);flex-direction:column;align-items:center;justify-content:center;font-size:28px;padding:0;gap:0}
+.bn-add .bn-label{display:none}
+
 .toast{position:fixed;bottom:22px;inset-inline-end:22px;background:var(--green-deep);color:#fff;padding:11px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,.2);opacity:0;transform:translateY(8px);transition:all .3s;z-index:9999;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
 
-@media(max-width:600px){
+
+/* ═══════════════════════════════════════════════════
+   MOBILE-FIRST — Primary breakpoints
+   Base: 0-480px (small phones)
+   md:  481-768px (large phones, small tablets)
+   lg:  769px+ (desktop)
+═══════════════════════════════════════════════════ */
+
+/* ── Touch targets: min 44px on mobile ── */
+@media(max-width:768px){
+  /* Layout */
+  main{padding:12px 12px 100px}
+
+  /* Header: compact single row */
+  .header-inner{padding:10px 14px;gap:8px}
+  .logo-icon{width:32px;height:32px;font-size:16px}
+  .logo-text h1{font-size:15px}
+  .logo-text p{display:none}
+  .live-label{display:none}
+  .lang-btn{padding:5px 8px;font-size:11px}
+  .btn-header{padding:7px 12px;font-size:12px}
+
+  /* Stats: 2x2 grid on phone */
+  .stats-grid{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  .stat-card{padding:12px 13px}
+  .stat-label{font-size:10px;letter-spacing:.3px}
+  .stat-value{font-size:20px}
+  .stat-sub{font-size:10px}
+
+  /* Admin section: stacked */
+  .admin-section{padding:14px}
+  .rates-grid{grid-template-columns:1fr}
+  .rate-item{padding:12px 14px}
+  .rate-name{font-size:15px}
+  .rate-input{width:90px;font-size:15px;padding:6px 10px}
+
+  /* Panel: remove border-radius on phone edges */
+  .panel{border-radius:12px;margin-bottom:12px}
+
+  /* Tabs: equal width, larger touch targets */
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:1;text-align:center;padding:13px 10px;font-size:13px;white-space:nowrap}
+
+  /* Form: single column, larger inputs */
+  .panel-body{padding:16px 14px}
+  .form-grid{grid-template-columns:1fr;gap:12px}
+  .form-group input,
+  .form-group select,
+  .form-group textarea{padding:13px 14px;font-size:16px;border-radius:10px}
+  .form-group label{font-size:13px}
+  .form-group textarea{min-height:70px}
+
+  /* Type buttons: full width stacked */
+  .type-btns{flex-direction:column;gap:10px}
+  .type-btn{width:100%;padding:14px 18px;font-size:15px;border-radius:12px;text-align:center}
+
+  /* Form actions: full width button */
+  .form-actions{flex-direction:column-reverse;gap:10px;margin-top:16px}
+  body.rtl .form-actions{flex-direction:column-reverse}
+  .form-actions .btn{width:100%;padding:14px;font-size:15px;border-radius:12px;text-align:center}
+
+  /* Entries table → mobile card list */
+  .filter-bar{padding:10px 14px;gap:8px}
+  .filter-bar input{width:100%;flex:1}
+  .filter-bar select{flex:1;min-width:0}
+
+  /* Hide desktop table, show mobile cards */
+  .table-wrap{display:none}
+  .mobile-cards{display:block}
+
+  /* Export bar */
+  .export-bar{padding:10px 14px;gap:8px;justify-content:center}
+  .btn-export{padding:10px 16px;font-size:13px;flex:1;text-align:center}
+
+  /* Monthly grid: single column */
+  .month-grid{grid-template-columns:1fr;gap:14px}
+  .mc-header h4{font-size:14px}
+  .mc-row{padding:8px 16px;font-size:14px}
+  .mc-section-title{padding:10px 16px 4px;font-size:11px}
+  .mc-divider{margin:0 16px 4px}
+  .mc-divider-heavy{margin:8px 16px}
+  .mc-total-row{padding:12px 16px}
+  .mc-grand-total{font-size:22px}
+  .mc-date-range{padding:8px 16px;font-size:12px}
+  .mc-payment{padding:12px 16px;gap:10px}
+  .mc-pay-btn{padding:10px 16px;font-size:13px;border-radius:10px}
+
+  /* Yearly summary */
+  .ys-year-block{padding:14px 16px}
+  .ys-row{padding:8px 0;font-size:14px}
+  .ys-paid-row,.ys-unpaid-row{padding:10px 12px!important}
+
+  /* Modal: full screen on phone */
+  .modal-overlay{padding:0;align-items:flex-end}
+  .modal{border-radius:20px 20px 0 0;padding:28px 24px 36px;max-width:100%;width:100%;box-shadow:0 -8px 40px rgba(0,0,0,.3)}
+  .modal-actions{gap:10px}
+  .modal-actions .btn{flex:1;padding:13px;font-size:15px}
+
+  /* Toast: above bottom nav */
+  .toast{bottom:80px;inset-inline-end:16px;inset-inline-start:16px;text-align:center;border-radius:12px}
+
+  /* Admin section add-rate row */
+  .admin-add-row{flex-direction:column!important;align-items:stretch!important}
+  .admin-add-row input{width:100%!important}
+  .admin-add-row button{width:100%}
+}
+
+/* ── Small phones (≤380px) ── */
+@media(max-width:380px){
   .stats-grid{grid-template-columns:1fr 1fr}
-  main{padding:14px 10px 40px}
-  .tab{padding:10px 12px;font-size:13px}
-  .type-btns{flex-direction:column}
-  .type-btn{width:100%}
+  .stat-value{font-size:18px}
+  .lang-btn{padding:4px 7px;font-size:10px}
+  .tab{font-size:12px;padding:12px 8px}
+}
+
+/* ── Desktop (≥769px): original layout ── */
+@media(min-width:769px){
+  .mobile-cards{display:none}
+  .table-wrap{display:block}
+  .form-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+  .type-btns{flex-direction:row}
+  .type-btn{width:auto}
+  .form-actions{flex-direction:row}
+  .form-actions .btn{width:auto}
+  main{padding:24px 16px 60px}
 }
 </style>
 </head>
@@ -1179,7 +1408,7 @@ body.rtl .ys-amt{text-align:left}
   <div class="admin-section" id="adminSection">
     <h3 id="adminTitle">⚙ Tagessätze verwalten</h3>
     <div class="rates-grid" id="ratesGrid"></div>
-    <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <div class="admin-add-row" style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <input type="text" id="newRateName" placeholder="Neuer Mitarbeitername..."
         style="border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:14px;background:#fffbf0;font-family:inherit;width:200px">
       <input type="number" id="newRateValue" placeholder="Tagessatz DH"
@@ -1283,6 +1512,8 @@ body.rtl .ys-amt{text-align:left}
           </tbody>
         </table>
       </div>
+      <!-- Mobile card list (shown on phones) -->
+      <div class="mobile-cards" id="mobileCards"></div>
       <div class="export-bar">
         <span id="exportLabel">Exportieren:</span>
         <button id="btnCSV" class="btn-export" onclick="exportCSV()">📄 CSV</button>
@@ -1316,5 +1547,20 @@ body.rtl .ys-amt{text-align:left}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- BOTTOM NAVIGATION (mobile only) -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bn-btn active" id="bn-entries" onclick="showTabMobile('entries')">
+    <span class="bn-icon">📋</span>
+    <span class="bn-label" id="bn-lbl-entries">Einträge</span>
+  </button>
+  <button class="bn-btn bn-add" id="bn-new" onclick="showTabMobile('new')">
+    <span class="bn-icon">＋</span>
+  </button>
+  <button class="bn-btn" id="bn-monthly" onclick="showTabMobile('monthly')">
+    <span class="bn-icon">📊</span>
+    <span class="bn-label" id="bn-lbl-monthly">Übersicht</span>
+  </button>
+</nav>
 </body>
 </html>
