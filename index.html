@@ -184,7 +184,6 @@ function applyLang() {
   localStorage.setItem("jyrrie_lang", lang);
   updateAllText();
   renderTable();
-  renderMobileCards();
   updateStats();
   populateNameSelect();
   populateMonthFilter();
@@ -202,7 +201,6 @@ function refreshCurrentTab() {
     window.renderMonthly();
   } else {
     renderTable();
-    renderMobileCards();
   }
 }
 
@@ -583,12 +581,10 @@ function renderTable() {
       + (isAdmin ? '<td><div class="td-actions">' + editBtn + delBtn + '</div></td>' : '')
       + '</tr>';
   }).join("");
+  // Also update mobile card view
+  if (typeof renderMobileCards === "function") renderMobileCards();
 }
-window.renderTable = function() {
-  renderTable();
-  renderMobileCards();
-};
-
+window.renderTable = renderTable;
 // ── MOBILE CARDS ──────────────────────────────────
 function renderMobileCards() {
   const mc = document.getElementById("mobileCards");
@@ -909,7 +905,7 @@ window.showTab = function(name) {
   const tab = document.querySelector('.tab[data-tab="' + name + '"]');
   if (tab) tab.classList.add("active");
   if (name === "monthly") window.renderMonthly();
-  if (name === "entries") { renderTable(); renderMobileCards(); }
+  if (name === "entries") { renderTable(); }
 };
 
 // ── ACCESS CODE ───────────────────────────────────────────────
@@ -1486,9 +1482,9 @@ body.rtl .ys-amt{text-align:left}
     <!-- EINTRÄGE -->
     <div class="tab-content active" id="tab-entries">
       <div class="filter-bar">
-        <input type="text" id="filterName" placeholder="🔍 Name filtern..." oninput="renderTable()">
-        <select id="filterMonth" onchange="renderTable()"><option value="">Alle Monate</option></select>
-        <select id="filterType" onchange="renderTable()">
+        <input type="text" id="filterName" placeholder="🔍 Name filtern..." oninput="window.renderTable()">
+        <select id="filterMonth" onchange="window.renderTable()"><option value="">Alle Monate</option></select>
+        <select id="filterType" onchange="window.renderTable()">
           <option value="">Alle Einträge</option>
           <option value="work">🌾 Arbeitstage</option>
           <option value="expense">🛒 Ausgaben</option>
