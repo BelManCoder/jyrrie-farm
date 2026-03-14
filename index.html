@@ -129,7 +129,7 @@ const T = {
     noEntries:"لا توجد إدخالات بعد.",
     exportLabel:"تصدير:", btnCSV:"📄 CSV", btnPrint:"🖨 طباعة / PDF",
     labelName:"اسم الموظف *", labelDate:"التاريخ *",
-    entryType:"نوع الإدخال *", btnWork:"🌾 يوم عمل", btnExpense:"🛒 مصاريف / مشتريات",
+    entryType:"نوع الإدخال *", btnWork:"🌾 عمل", btnExpense:"🛒 مصاريف / مشتريات",
     labelDay:"يوم العمل *", labelExp:"المبلغ (DH) *", labelDesc:"الوصف / ملاحظات",
     labelNotes:"ملاحظات", notesPlaceholder:"ملاحظات اختيارية...", descPlaceholder:"ماذا تم شراؤه؟",
     cancel:"إلغاء", save:"💾 حفظ", update:"✏ تحديث",
@@ -147,7 +147,7 @@ const T = {
     toastLoggedOut:"تم تسجيل الخروج.", fillFields:"⚠ يرجى ملء جميع الحقول الإلزامية.",
     fillAmount:"⚠ يرجى إدخال المبلغ.",
     confirmDelete:"هل تريد حذف هذا الإدخال؟", confirmRate:"هل تريد حذف هذا الأجر؟",
-    enterName:"اسم الموظف:", noData:"لا توجد بيانات بعد.", perDay:"/يوم", dayUnit:"يوم",
+    enterName:"اسم الموظف:", noData:"لا توجد بيانات بعد.", perDay:"", dayUnit:"يوم",
     accessPrompt:"🔒 أدخل رمز الوصول",
     accessBtn:"تأكيد الدخول →", accessError:"❌ رمز خاطئ. حاول مرة أخرى.",
     accessFooter:"للموظفين المصرح لهم فقط",
@@ -578,10 +578,12 @@ function renderTable() {
 
     const dayLbl  = e.day === 1 ? t.fullBadge : t.halfBadge;
     const dayClass = e.day === 1 ? "day-full" : "day-half";
+    const earned   = rate * (e.day || 1);
+    const rateInfo = t.perDay ? rate + ' ' + CURRENCY + t.perDay : rate + ' ' + CURRENCY;
     const details = isWork
       ? '<div class="detail-work">'
         + '<span class="day-badge ' + dayClass + '">' + dayLbl + '</span>'
-        + '<span class="detail-rate" dir="ltr">' + rate + ' ' + CURRENCY + t.perDay + '</span>'
+        + '<span class="detail-rate" dir="ltr">' + fmtAmt(earned) + '</span>'
         + '</div>'
       : '<div class="detail-expense">'
         + '<span class="detail-exp-amt" dir="ltr">' + fmtMoney(e.expenses) + '</span>'
