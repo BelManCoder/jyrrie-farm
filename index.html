@@ -70,7 +70,7 @@ const T = {
     mPaid:"Bezahlt", mUnpaid:"Nicht bezahlt", mPaidOn:"am",
     mPayNow:"Bitte zeitnah zahlen", mMarkPaid:"Als bezahlt markieren",
     mMarkUnpaid:"Als nicht bezahlt markieren",
-    yTitle:"Jahresübersicht", yPaidTotal:"Bezahlt gesamt", yUnpaidTotal:"Nicht bezahlt gesamt",
+    yTitle:"Jahresübersicht", yPaidTotal:"Bezahlt gesamt", yUnpaidTotal:"Nicht bezahlt gesamt", yMonth:"Mon.", yTotal:"Gesamt",
   },
   fr: {
     title:"Jyrrie Farm", subtitle:"Gestion des employés",
@@ -111,7 +111,7 @@ const T = {
     mPaid:"Payé", mUnpaid:"Non payé", mPaidOn:"le",
     mPayNow:"Paiement à prévoir", mMarkPaid:"Marquer comme payé",
     mMarkUnpaid:"Marquer non payé",
-    yTitle:"Bilan annuel", yPaidTotal:"Total payé", yUnpaidTotal:"Total non payé",
+    yTitle:"Bilan annuel", yPaidTotal:"Total payé", yUnpaidTotal:"Total non payé", yMonth:"Mois", yTotal:"Total",
   },
   ar: {
     title:"مزرعة جيري", subtitle:"إدارة الموظفين",
@@ -152,7 +152,7 @@ const T = {
     mPaid:"مدفوع", mUnpaid:"غير مدفوع", mPaidOn:"بتاريخ",
     mPayNow:"يرجى الدفع قريباً", mMarkPaid:"تحديد كمدفوع",
     mMarkUnpaid:"تحديد كغير مدفوع",
-    yTitle:"ملخص سنوي", yPaidTotal:"المدفوع إجمالاً", yUnpaidTotal:"غير المدفوع إجمالاً",
+    yTitle:"ملخص سنوي", yPaidTotal:"المدفوع إجمالاً", yUnpaidTotal:"غير المدفوع إجمالاً", yMonth:"شهر", yTotal:"المجموع",
   }
 };
 
@@ -763,7 +763,7 @@ function renderYearlySummary(months) {
               ? '<div class="ys-row ys-paid-row">'
                 + '<span class="ys-dot dot-paid"></span>'
                 + '<span class="ys-lbl">' + t.yPaidTotal
-                + ' <span class="ys-months-count">(' + y.paidMonths + ' Mon.)</span></span>'
+                + ' <span class="ys-months-count">(' + y.paidMonths + ' ' + t.yMonth + ')</span></span>'
                 + '<span class="ys-amt ys-paid-amt" dir="ltr">' + fmtAmt(y.paid) + '</span>'
                 + '</div>'
               : '')
@@ -771,13 +771,14 @@ function renderYearlySummary(months) {
               ? '<div class="ys-row ys-unpaid-row">'
                 + '<span class="ys-dot dot-unpaid"></span>'
                 + '<span class="ys-lbl">' + t.yUnpaidTotal
-                + ' <span class="ys-months-count">(' + y.unpaidMonths + ' Mon.)</span></span>'
+                + ' <span class="ys-months-count">(' + y.unpaidMonths + ' ' + t.yMonth + ')</span></span>'
                 + '<span class="ys-amt ys-unpaid-amt" dir="ltr">' + fmtAmt(y.unpaid) + '</span>'
                 + '</div>'
               : '')
           + (hasPaid && hasUnpaid
               ? '<div class="ys-row ys-combined">'
-                + '<span style="font-size:12px;color:var(--text-muted)">= ' + fmtAmt(y.paid + y.unpaid) + '</span>'
+                + '<span class="ys-combined-lbl" style="font-size:13px;color:var(--text-muted);font-weight:500">' + t.yTotal + '</span>'
+                + '<span class="ys-combined-amt" dir="ltr" style="font-size:15px;font-weight:700;color:var(--text-dark)">' + fmtAmt(y.paid + y.unpaid) + '</span>'
                 + '</div>'
               : '')
           + '</div>';
@@ -1087,7 +1088,7 @@ body.rtl .ys-amt{text-align:left}
 .ys-unpaid-amt{color:var(--terracotta)}
 .ys-paid-row{background:rgba(34,197,94,.05);border-radius:8px;padding:7px 10px!important;margin-bottom:4px}
 .ys-unpaid-row{background:rgba(249,115,22,.05);border-radius:8px;padding:7px 10px!important;margin-bottom:4px}
-.ys-combined{justify-content:flex-end;padding-top:4px!important;border-top:1px dashed var(--border)}
+.ys-combined{justify-content:space-between;padding:8px 10px!important;border-top:1px dashed var(--border);background:var(--green-mist);border-radius:8px;margin-top:4px}
 
 .toast{position:fixed;bottom:22px;inset-inline-end:22px;background:var(--green-deep);color:#fff;padding:11px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,.2);opacity:0;transform:translateY(8px);transition:all .3s;z-index:9999;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
