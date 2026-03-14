@@ -70,6 +70,7 @@ const T = {
     mPaid:"Bezahlt", mUnpaid:"Nicht bezahlt", mPaidOn:"am",
     mPayNow:"Bitte zeitnah zahlen", mMarkPaid:"Als bezahlt markieren",
     mMarkUnpaid:"Als nicht bezahlt markieren",
+    yTitle:"Jahresübersicht", yPaidTotal:"Bezahlt gesamt", yUnpaidTotal:"Nicht bezahlt gesamt",
   },
   fr: {
     title:"Jyrrie Farm", subtitle:"Gestion des employés",
@@ -110,6 +111,7 @@ const T = {
     mPaid:"Payé", mUnpaid:"Non payé", mPaidOn:"le",
     mPayNow:"Paiement à prévoir", mMarkPaid:"Marquer comme payé",
     mMarkUnpaid:"Marquer non payé",
+    yTitle:"Bilan annuel", yPaidTotal:"Total payé", yUnpaidTotal:"Total non payé",
   },
   ar: {
     title:"مزرعة جيري", subtitle:"إدارة الموظفين",
@@ -150,6 +152,7 @@ const T = {
     mPaid:"مدفوع", mUnpaid:"غير مدفوع", mPaidOn:"بتاريخ",
     mPayNow:"يرجى الدفع قريباً", mMarkPaid:"تحديد كمدفوع",
     mMarkUnpaid:"تحديد كغير مدفوع",
+    yTitle:"ملخص سنوي", yPaidTotal:"المدفوع إجمالاً", yUnpaidTotal:"غير المدفوع إجمالاً",
   }
 };
 
@@ -615,6 +618,20 @@ window.renderMonthly = function() {
 
   const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
 
+  // Also build flat months map for yearly summary (reuse same data loop)
+  const monthsForSummary = {};
+  entries.forEach(function(e) {
+    const m    = e.date.slice(0, 7);
+    const type = e.type || (e.expenses > 0 ? "expense" : "work");
+    if (!monthsForSummary[m]) monthsForSummary[m] = { workers: {}, expensesList: [] };
+    if (type === "work") {
+      if (!monthsForSummary[m].workers[e.name]) monthsForSummary[m].workers[e.name] = { days: 0, wage: 0 };
+      monthsForSummary[m].workers[e.name].wage += getRate(e.name) * (e.day || 0);
+    } else {
+      monthsForSummary[m].expensesList.push({ amount: e.expenses || 0 });
+    }
+  });
+
   grid.innerHTML = sorted.map(function(m) {
     const data     = months[m];
     const parts    = m.split("-");
@@ -703,7 +720,70 @@ window.renderMonthly = function() {
       + payRow
       + '</div>';
   }).join("");
+  renderYearlySummary(monthsForSummary);
 };
+
+// ── YEARLY SUMMARY ───────────────────────────────────────────
+function renderYearlySummary(months) {
+  const years = {};
+
+  Object.keys(months).forEach(function(m) {
+    const yr   = m.slice(0, 4);
+    const data = months[m];
+    const pmt  = payments[m] || { paid: false };
+    const totalWage = Object.values(data.workers).reduce(function(s, w) { return s + w.wage; }, 0);
+    const totalExp  = data.expensesList.reduce(function(s, e) { return s + e.amount; }, 0);
+    const grand     = totalWage + totalExp;
+
+    if (!years[yr]) years[yr] = { paid: 0, unpaid: 0, paidMonths: 0, unpaidMonths: 0 };
+    if (pmt.paid) {
+      years[yr].paid       += grand;
+      years[yr].paidMonths += 1;
+    } else {
+      years[yr].unpaid       += grand;
+      years[yr].unpaidMonths += 1;
+    }
+  });
+
+  const container = document.getElementById("yearlySummary");
+  if (!container) return;
+  const sortedYears = Object.keys(years).sort().reverse();
+  if (!sortedYears.length) { container.innerHTML = ""; return; }
+
+  container.innerHTML = '<div class="ys-wrapper">'
+    + '<div class="ys-title">📅 ' + t.yTitle + '</div>'
+    + sortedYears.map(function(yr) {
+        const y = years[yr];
+        const hasPaid   = y.paid > 0;
+        const hasUnpaid = y.unpaid > 0;
+        return '<div class="ys-year-block">'
+          + '<div class="ys-year-label">' + yr + '</div>'
+          + '<div class="ys-year-divider"></div>'
+          + (hasPaid
+              ? '<div class="ys-row ys-paid-row">'
+                + '<span class="ys-dot dot-paid"></span>'
+                + '<span class="ys-lbl">' + t.yPaidTotal
+                + ' <span class="ys-months-count">(' + y.paidMonths + ' Mon.)</span></span>'
+                + '<span class="ys-amt ys-paid-amt" dir="ltr">' + fmtAmt(y.paid) + '</span>'
+                + '</div>'
+              : '')
+          + (hasUnpaid
+              ? '<div class="ys-row ys-unpaid-row">'
+                + '<span class="ys-dot dot-unpaid"></span>'
+                + '<span class="ys-lbl">' + t.yUnpaidTotal
+                + ' <span class="ys-months-count">(' + y.unpaidMonths + ' Mon.)</span></span>'
+                + '<span class="ys-amt ys-unpaid-amt" dir="ltr">' + fmtAmt(y.unpaid) + '</span>'
+                + '</div>'
+              : '')
+          + (hasPaid && hasUnpaid
+              ? '<div class="ys-row ys-combined">'
+                + '<span style="font-size:12px;color:var(--text-muted)">= ' + fmtAmt(y.paid + y.unpaid) + '</span>'
+                + '</div>'
+              : '')
+          + '</div>';
+      }).join("")
+    + '</div>';
+}
 
 // ── MONTH FILTER ──────────────────────────────────────────────
 function populateMonthFilter() {
@@ -988,6 +1068,27 @@ body.rtl .modal h2{font-family:'Noto Sans Arabic',sans-serif}
 .modal-actions{display:flex;gap:10px}
 .modal-error{color:var(--terracotta);font-size:13px;margin-top:-6px;margin-bottom:10px;display:none}
 
+/* ── YEARLY SUMMARY ───────────────────────────────── */
+.ys-wrapper{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.ys-title{background:var(--green-deep);color:#fff;font-family:'Playfair Display',serif;font-size:15px;font-weight:500;padding:13px 20px;letter-spacing:.3px}
+body.rtl .ys-title{font-family:'Noto Sans Arabic',sans-serif;letter-spacing:0}
+.ys-year-block{padding:16px 20px;border-bottom:1px solid var(--sand-dark)}
+.ys-year-block:last-child{border-bottom:none}
+.ys-year-label{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--green-deep);margin-bottom:8px}
+body.rtl .ys-year-label{font-family:'Noto Sans Arabic',sans-serif}
+.ys-year-divider{height:1px;background:var(--border);margin-bottom:10px}
+.ys-row{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:14px}
+.ys-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.ys-lbl{flex:1;color:var(--text-mid)}
+.ys-months-count{font-size:11px;color:var(--text-muted);font-weight:400}
+.ys-amt{font-weight:600;font-size:15px;min-width:100px;text-align:right}
+body.rtl .ys-amt{text-align:left}
+.ys-paid-amt{color:var(--green-mid)}
+.ys-unpaid-amt{color:var(--terracotta)}
+.ys-paid-row{background:rgba(34,197,94,.05);border-radius:8px;padding:7px 10px!important;margin-bottom:4px}
+.ys-unpaid-row{background:rgba(249,115,22,.05);border-radius:8px;padding:7px 10px!important;margin-bottom:4px}
+.ys-combined{justify-content:flex-end;padding-top:4px!important;border-top:1px dashed var(--border)}
+
 .toast{position:fixed;bottom:22px;inset-inline-end:22px;background:var(--green-deep);color:#fff;padding:11px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,.2);opacity:0;transform:translateY(8px);transition:all .3s;z-index:9999;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
 
@@ -1192,6 +1293,7 @@ body.rtl .modal h2{font-family:'Noto Sans Arabic',sans-serif}
     <div class="tab-content" id="tab-monthly">
       <div class="panel-body">
         <div class="month-grid" id="monthlyGrid"></div>
+        <div id="yearlySummary" style="margin-top:28px;"></div>
       </div>
     </div>
   </div>
