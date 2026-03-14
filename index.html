@@ -473,7 +473,29 @@
 
   window.switchLang = function(l) { lang=l; applyLang(); };
 
-  window.addEventListener('DOMContentLoaded', async ()=>{
+  // ── ZUGANGSCODE ───────────────────────────────────────────────
+  const ACCESS_CODE = '9999'; // ← Zugangscode hier ändern
+
+  function isAccessGranted() {
+    return sessionStorage.getItem('jyrrie_access') === ACCESS_CODE;
+  }
+
+  window.checkAccess = function() {
+    const input = document.getElementById('accessInput').value.trim();
+    if (input === ACCESS_CODE) {
+      sessionStorage.setItem('jyrrie_access', ACCESS_CODE);
+      document.getElementById('accessScreen').style.display = 'none';
+      initApp();
+    } else {
+      const err = document.getElementById('accessError');
+      err.style.display = 'block';
+      document.getElementById('accessInput').value = '';
+      document.getElementById('accessInput').focus();
+      setTimeout(()=> err.style.display='none', 3000);
+    }
+  };
+
+  async function initApp() {
     document.getElementById('f_date').value = today();
     showLoading(t.loading);
     try {
@@ -484,6 +506,20 @@
       applyLang();
     } catch(e) { console.error(e); hideLoading(); }
     document.getElementById('pinInput')?.addEventListener('keydown',e=>{ if(e.key==='Enter') window.checkPin(); });
+  }
+
+  window.addEventListener('DOMContentLoaded', ()=>{
+    if (isAccessGranted()) {
+      document.getElementById('accessScreen').style.display = 'none';
+      initApp();
+    } else {
+      document.getElementById('accessScreen').style.display = 'flex';
+      document.getElementById('loadingOverlay').style.display = 'none';
+      setTimeout(()=> document.getElementById('accessInput').focus(), 300);
+      document.getElementById('accessInput').addEventListener('keydown', e=>{
+        if (e.key==='Enter') window.checkAccess();
+      });
+    }
   });
 </script>
 
@@ -638,6 +674,26 @@
 </head>
 <body>
 
+<!-- ZUGANGSCODE BILDSCHIRM -->
+<div id="accessScreen" style="display:none;position:fixed;inset:0;background:var(--green-deep);z-index:10000;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+  <div style="text-align:center;margin-bottom:32px;">
+    <div style="font-size:52px;margin-bottom:12px;">🌿</div>
+    <h1 style="font-family:'Playfair Display',serif;color:#fff;font-size:26px;font-weight:700;margin-bottom:6px;">Jyrrie Farm</h1>
+    <p style="color:rgba(255,255,255,0.55);font-size:13px;letter-spacing:1px;text-transform:uppercase;">Mitarbeiterverwaltung</p>
+  </div>
+  <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:32px 28px;max-width:340px;width:100%;">
+    <p style="color:rgba(255,255,255,0.75);font-size:14px;text-align:center;margin-bottom:20px;">🔒 Bitte Zugangscode eingeben</p>
+    <input id="accessInput" type="password" placeholder="• • • •" maxlength="8"
+      style="width:100%;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:10px;padding:14px;font-size:22px;color:#fff;text-align:center;letter-spacing:8px;font-family:inherit;outline:none;margin-bottom:12px;">
+    <p id="accessError" style="display:none;color:#fca5a5;font-size:13px;text-align:center;margin-bottom:12px;">❌ Falscher Code. Bitte erneut versuchen.</p>
+    <button onclick="checkAccess()"
+      style="width:100%;background:var(--green-light);border:none;border-radius:10px;padding:13px;color:#fff;font-size:15px;font-weight:500;cursor:pointer;font-family:inherit;transition:background 0.2s;">
+      Zugang bestätigen →
+    </button>
+  </div>
+  <p style="color:rgba(255,255,255,0.25);font-size:11px;margin-top:24px;">Nur für autorisierte Mitarbeiter</p>
+</div>
+
 <div id="loadingOverlay">
   <div class="spinner"></div>
   <div id="loadingText">Verbinde...</div>
@@ -749,7 +805,7 @@
       <button id="btnModalCancel" class="btn btn-secondary" onclick="closeModal()" style="flex:1">Abbrechen</button>
       <button id="btnModalLogin" class="btn btn-primary" onclick="checkPin()" style="flex:1">Einloggen</button>
     </div>
-    <p id="pinHint" style="font-size:12px;color:#aaa;margin-top:12px;text-align:center">Standard-PIN: 0909</p>
+    <p id="pinHint" style="font-size:12px;color:#aaa;margin-top:12px;text-align:center">Standard-PIN: 1234</p>
   </div>
 </div>
 
