@@ -418,6 +418,8 @@ window.clearForm = function() {
   window.selectType("work");
   const btn = document.querySelector("[data-save]");
   if (btn) btn.textContent = t.save;
+  // Navigate back to entries tab
+  window.showTabMobile("entries");
 };
 
 window.editEntry = function(id) {
