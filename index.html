@@ -1117,11 +1117,11 @@ body.rtl .ys-amt{text-align:left}
 @media(min-width:769px){
   .bottom-nav{display:none!important}
 }
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:1px solid var(--border);z-index:200;justify-content:space-around;align-items:center;padding:8px 0 max(8px,env(safe-area-inset-bottom));box-shadow:0 -4px 16px rgba(0,0,0,.08)}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:1px solid var(--border);z-index:200;display:none;justify-content:space-around;align-items:center;padding:8px 0 max(8px,env(safe-area-inset-bottom));box-shadow:0 -4px 16px rgba(0,0,0,.08)}
 .bn-btn{display:flex;flex-direction:column;align-items:center;gap:3px;border:none;background:transparent;color:var(--text-muted);font-size:10px;font-weight:500;padding:4px 16px;cursor:pointer;font-family:inherit;transition:color .18s;min-width:60px}
 .bn-btn.active{color:var(--green-deep)}
 .bn-icon{font-size:20px;line-height:1}
-.bn-add{background:var(--green-mid);color:#fff!important;border-radius:50%;width:52px;height:52px;margin-top:-20px;box-shadow:0 4px 14px rgba(45,90,61,.4);flex-direction:column;align-items:center;justify-content:center;font-size:28px;padding:0;gap:0}
+.bn-add{background:var(--green-mid);color:#fff!important;border-radius:50%;width:56px;height:56px;margin-top:-22px;box-shadow:0 4px 16px rgba(45,90,61,.45);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:30px;padding:0;gap:0;border:3px solid var(--white)}
 .bn-add .bn-label{display:none}
 
 .toast{position:fixed;bottom:22px;inset-inline-end:22px;background:var(--green-deep);color:#fff;padding:11px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,.2);opacity:0;transform:translateY(8px);transition:all .3s;z-index:9999;pointer-events:none}
@@ -1143,7 +1143,8 @@ body.rtl .ys-amt{text-align:left}
 
 @media(max-width:768px){
   /* Layout */
-  main{padding:10px 10px 90px}
+  main{padding:10px 10px 120px}
+  .bottom-nav{display:flex!important}
 
   /* Header */
   .header-inner{padding:9px 12px;gap:6px}
@@ -1279,7 +1280,7 @@ body.rtl .ys-amt{text-align:left}
   .modal-actions .btn{flex:1;padding:13px;font-size:15px}
 
   /* Toast above bottom nav */
-  .toast{bottom:75px;inset-inline-end:12px;inset-inline-start:12px;text-align:center;border-radius:12px;font-size:13px}
+  .toast{bottom:90px;inset-inline-end:12px;inset-inline-start:12px;text-align:center;border-radius:12px;font-size:13px}
 }
 
 /* ── Small phones ── */
@@ -1295,6 +1296,7 @@ body.rtl .ys-amt{text-align:left}
 @media(min-width:769px){
   .bottom-nav{display:none!important}
   main{padding:24px 16px 60px}
+  .mobile-cards{display:none}
   thead{display:table-header-group}
   tbody tr{display:table-row;border:none;border-radius:0;box-shadow:none;margin:0;padding:0}
   td{display:table-cell;border-bottom:none;text-align:left;padding:10px 14px}
