@@ -510,6 +510,7 @@ function renderTable() {
       + '<td>' + typeBadge + '</td>'
       + '<td>' + details + '</td>'
       + '<td class="td-note">' + (e.notes || "—") + '</td>'
+      + '<td style="font-size:12px;color:var(--text-muted);white-space:nowrap">' + fmtDateTime(e.updatedAt || e.createdAt) + '</td>'
       + '<td><div class="td-actions">'
       + '<button class="btn btn-edit" onclick="editEntry(\'' + e.id + '\')">✏</button>'
       + delBtn
