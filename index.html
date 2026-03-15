@@ -845,7 +845,199 @@ window.exportCSV = function() {
   a.click();
   toast("✓ CSV");
 };
-window.exportPrint = function() { window.print(); };
+window.exportPrint = function() {
+  // Build a clean print-only table before printing
+  const now    = new Date();
+  const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
+  const dateStr = now.toLocaleDateString(locale, {day:"2-digit",month:"2-digit",year:"numeric"});
+  const timeStr = now.toLocaleTimeString(locale, {hour:"2-digit",minute:"2-digit"});
+
+  // Gather current filter state
+  const fName  = (document.getElementById("filterName")?.value || "").toLowerCase();
+  const fMonth = document.getElementById("filterMonth")?.value || "";
+  const fType  = document.getElementById("filterType")?.value  || "";
+
+  const filtered = entries.filter(function(e) {
+    const type = e.type || (e.expenses > 0 ? "expense" : "work");
+    return (!fName  || e.name.toLowerCase().indexOf(fName) !== -1)
+        && (!fMonth || e.date.indexOf(fMonth) === 0)
+        && (!fType  || type === fType);
+  });
+
+  // Compute totals
+  const totalDays  = filtered.reduce(function(s,e){ return s+(e.day||0); },0);
+  const totalWages = filtered.reduce(function(s,e){ return s+getRate(e.name)*(e.day||0); },0);
+  const totalExp   = filtered.reduce(function(s,e){ return s+(e.expenses||0); },0);
+
+  // Build rows
+  const rows = filtered.map(function(e) {
+    const type   = e.type || (e.expenses > 0 ? "expense" : "work");
+    const isWork = type === "work";
+    const earned = isWork ? getRate(e.name) * (e.day || 0) : null;
+    const dayLbl = e.day === 1 ? t.fullBadge : t.halfBadge;
+    const detailTxt = isWork
+      ? dayLbl + "  ·  " + fmtAmt(earned)
+      : fmtAmt(e.expenses);
+    const typeTxt = isWork
+      ? (lang==="ar"?"عمل":lang==="fr"?"Travail":"Arbeitstag")
+      : (lang==="ar"?"مصاريف":lang==="fr"?"Dépense":"Ausgaben");
+    return "<tr>"
+      + "<td>" + e.name + "</td>"
+      + "<td>" + fmtDate(e.date) + "</td>"
+      + "<td>" + typeTxt + "</td>"
+      + "<td>" + detailTxt + "</td>"
+      + "<td>" + (e.notes || "—") + "</td>"
+      + "</tr>";
+  }).join("");
+
+  // Filter label
+  let filterInfo = "";
+  if (fMonth) {
+    const parts = fMonth.split("-");
+    filterInfo = new Date(parseInt(parts[0]),parseInt(parts[1])-1)
+      .toLocaleDateString(locale,{month:"long",year:"numeric"});
+  }
+
+  const dir  = lang === "ar" ? "rtl" : "ltr";
+  const font = lang === "ar" ? "'Noto Sans Arabic', sans-serif" : "'DM Sans', sans-serif";
+
+  const printHtml = `<!DOCTYPE html>
+<html lang="${lang}" dir="${dir}">
+<head>
+<meta charset="UTF-8">
+<title>Jyrrie Farm — Export</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Noto+Sans+Arabic:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: ${font}; color: #1a2418; background: #fff; font-size: 11pt; }
+  .page { padding: 24px 28px; }
+
+  /* Header */
+  .print-header { display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 3px solid #1a3a2a; padding-bottom: 14px; margin-bottom: 20px; }
+  .farm-logo { display: flex; align-items: center; gap: 10px; }
+  .farm-icon { font-size: 28px; }
+  .farm-name { font-size: 20pt; font-weight: 600; color: #1a3a2a; }
+  .farm-sub  { font-size: 9pt; color: #7a8c75; margin-top: 2px; }
+  .print-meta { text-align: ${lang==="ar"?"left":"right"}; font-size: 9pt; color: #7a8c75; }
+  .print-meta strong { color: #1a3a2a; }
+
+  /* Stats bar */
+  .stats-bar { display: flex; gap: 12px; margin-bottom: 18px; }
+  .stat-box { flex: 1; border: 1px solid #d0ddc8; border-radius: 8px; padding: 10px 14px;
+    border-top: 4px solid #2d5a3d; }
+  .stat-box.amber { border-top-color: #c8821a; }
+  .stat-box.terra { border-top-color: #b85c38; }
+  .stat-lbl { font-size: 8pt; color: #7a8c75; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
+  .stat-val { font-size: 16pt; font-weight: 600; color: #1a3a2a; }
+
+  /* Filter info */
+  .filter-info { font-size: 9pt; color: #7a8c75; margin-bottom: 14px;
+    padding: 6px 12px; background: #f2f7f3; border-radius: 6px; display: inline-block; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+  thead tr { background: #1a3a2a; color: #fff; }
+  thead th { padding: 9px 12px; text-align: ${lang==="ar"?"right":"left"};
+    font-weight: 500; font-size: 9pt; letter-spacing: .3px; white-space: nowrap; }
+  tbody tr:nth-child(even) { background: #f5ede0; }
+  tbody tr:nth-child(odd)  { background: #fff; }
+  tbody tr:hover { background: #e8f0ea; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e8d8c0; vertical-align: top; }
+  td:first-child { font-weight: 500; }
+  .type-work { color: #166534; }
+  .type-expense { color: #b85c38; }
+  .detail-cell { font-weight: 500; }
+
+  /* Totals row */
+  .totals-row { background: #1a3a2a !important; color: #fff; }
+  .totals-row td { border: none; padding: 10px 12px; font-weight: 600; }
+
+  /* Footer */
+  .print-footer { margin-top: 24px; padding-top: 12px;
+    border-top: 1px solid #d0ddc8; display: flex; justify-content: space-between;
+    font-size: 8pt; color: #7a8c75; }
+
+  @page { margin: 1.5cm; size: A4 portrait; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="print-header">
+    <div class="farm-logo">
+      <span class="farm-icon">🌿</span>
+      <div>
+        <div class="farm-name">Jyrrie Farm</div>
+        <div class="farm-sub">${lang==="ar"?"إدارة الموظفين":lang==="fr"?"Gestion des employés":"Mitarbeiterverwaltung"}</div>
+      </div>
+    </div>
+    <div class="print-meta">
+      <strong>${lang==="ar"?"تاريخ التصدير":lang==="fr"?"Date d'export":"Exportdatum"}</strong><br>
+      ${dateStr} · ${timeStr}<br>
+      ${lang==="ar"?"إجمالي السجلات":lang==="fr"?"Total entrées":"Einträge gesamt"}: <strong>${filtered.length}</strong>
+    </div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-box">
+      <div class="stat-lbl">${lang==="ar"?"أيام العمل":lang==="fr"?"Jours travaillés":"Arbeitstage"}</div>
+      <div class="stat-val">${totalDays.toFixed(1)}</div>
+    </div>
+    <div class="stat-box amber">
+      <div class="stat-lbl">${lang==="ar"?"إجمالي الأجور":lang==="fr"?"Coût salarial":"Lohnkosten"}</div>
+      <div class="stat-val">${fmtAmt(totalWages)}</div>
+    </div>
+    <div class="stat-box terra">
+      <div class="stat-lbl">${lang==="ar"?"إجمالي المصاريف":lang==="fr"?"Dépenses":"Ausgaben"}</div>
+      <div class="stat-val">${fmtAmt(totalExp)}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-lbl">${lang==="ar"?"الإجمالي":lang==="fr"?"Total":"Gesamt"}</div>
+      <div class="stat-val">${fmtAmt(totalWages + totalExp)}</div>
+    </div>
+  </div>
+
+  ${filterInfo ? '<div class="filter-info">📅 ' + filterInfo + '</div>' : ''}
+
+  <table>
+    <thead>
+      <tr>
+        <th>${t.cols[0]}</th>
+        <th>${t.cols[1]}</th>
+        <th>${t.cols[2]}</th>
+        <th>${t.cols[3]}</th>
+        <th>${t.cols[4]}</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+      <tr class="totals-row">
+        <td colspan="3">${lang==="ar"?"الإجمالي":lang==="fr"?"Total":"Gesamt"}</td>
+        <td>${fmtAmt(totalWages + totalExp)}</td>
+        <td>${totalDays.toFixed(1)} ${lang==="ar"?"يوم":lang==="fr"?"jour(s)":"Tag(e)"}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="print-footer">
+    <span>belmancoder.github.io/jyrrie-farm</span>
+    <span>${lang==="ar"?"تم إنشاؤه بواسطة Jyrrie Farm":lang==="fr"?"Généré par Jyrrie Farm":"Erstellt von Jyrrie Farm"}</span>
+    <span>${dateStr}</span>
+  </div>
+</div>
+<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>
+</body></html>`;
+
+  const w = window.open("", "_blank");
+  if (w) {
+    w.document.write(printHtml);
+    w.document.close();
+  } else {
+    toast("⚠ Popup blockiert — bitte Popups erlauben.");
+  }
+};
 
 // ── TABS ──────────────────────────────────────────────────────
 // ── BOTTOM NAV SYNC ──────────────────────────────────────────
