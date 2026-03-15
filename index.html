@@ -846,13 +846,13 @@ window.exportCSV = function() {
   toast("✓ CSV");
 };
 window.exportPrint = function() {
-  // Build a clean print-only table before printing
   const now    = new Date();
-  const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
+  const isAr   = lang === "ar";
+  const isFr   = lang === "fr";
+  const locale = isAr ? "ar-MA" : isFr ? "fr-FR" : "de-DE";
   const dateStr = now.toLocaleDateString(locale, {day:"2-digit",month:"2-digit",year:"numeric"});
   const timeStr = now.toLocaleTimeString(locale, {hour:"2-digit",minute:"2-digit"});
 
-  // Gather current filter state
   const fName  = (document.getElementById("filterName")?.value || "").toLowerCase();
   const fMonth = document.getElementById("filterMonth")?.value || "";
   const fType  = document.getElementById("filterType")?.value  || "";
@@ -864,34 +864,44 @@ window.exportPrint = function() {
         && (!fType  || type === fType);
   });
 
-  // Compute totals
   const totalDays  = filtered.reduce(function(s,e){ return s+(e.day||0); },0);
   const totalWages = filtered.reduce(function(s,e){ return s+getRate(e.name)*(e.day||0); },0);
   const totalExp   = filtered.reduce(function(s,e){ return s+(e.expenses||0); },0);
+  const grandTotal = totalWages + totalExp;
 
-  // Build rows — keep numbers in ltr, text in natural direction
-  const rows = filtered.map(function(e) {
+  // Helper: number always LTR
+  function n(v){ return '<span style="direction:ltr;unicode-bidi:embed;display:inline-block">' + v + '</span>'; }
+
+  // Columns definition — for AR reverse order
+  // LTR order: Name | Date | Type | Detail | Notes
+  // RTL order: Notes | Detail | Type | Date | Name
+  const colHdrs = isAr
+    ? [t.cols[4], t.cols[3], t.cols[2], t.cols[1], t.cols[0]]
+    : [t.cols[0], t.cols[1], t.cols[2], t.cols[3], t.cols[4]];
+
+  const rows = filtered.map(function(e, idx) {
     const type   = e.type || (e.expenses > 0 ? "expense" : "work");
     const isWork = type === "work";
     const earned = isWork ? getRate(e.name) * (e.day || 0) : null;
     const dayLbl = e.day === 1 ? t.fullBadge : t.halfBadge;
-    // Separate day label and amount so RTL doesn't mix them
-    const detailTxt = isWork
-      ? '<span dir="rtl">' + dayLbl + '</span> &nbsp;<span class="amt">' + fmtAmt(earned) + '</span>'
-      : '<span class="amt">' + fmtAmt(e.expenses) + '</span>';
     const typeTxt = isWork
-      ? (lang==="ar"?"عمل":lang==="fr"?"Travail":"Arbeitstag")
-      : (lang==="ar"?"مصاريف":lang==="fr"?"Dépense":"Ausgaben");
-    return "<tr>"
-      + "<td>" + e.name + "</td>"
-      + "<td class=\"num\">" + fmtDate(e.date) + "</td>"
-      + "<td>" + typeTxt + "</td>"
-      + "<td>" + detailTxt + "</td>"
-      + "<td>" + (e.notes || "—") + "</td>"
-      + "</tr>";
+      ? (isAr ? "عمل" : isFr ? "Travail" : "Arbeitstag")
+      : (isAr ? "مصاريف" : isFr ? "Dépense" : "Ausgaben");
+    const detailTxt = isWork
+      ? dayLbl + "  " + n(fmtAmt(earned))
+      : n(fmtAmt(e.expenses));
+    const bg = idx % 2 === 0 ? "#fff" : "#f5ede0";
+    const cells = [
+      '<td style="font-weight:500">' + e.name + '</td>',
+      '<td>' + n(fmtDate(e.date)) + '</td>',
+      '<td>' + typeTxt + '</td>',
+      '<td>' + detailTxt + '</td>',
+      '<td style="color:#555">' + (e.notes || "—") + '</td>',
+    ];
+    const orderedCells = isAr ? cells.slice().reverse().join("") : cells.join("");
+    return '<tr style="background:' + bg + '">' + orderedCells + '</tr>';
   }).join("");
 
-  // Filter label
   let filterInfo = "";
   if (fMonth) {
     const parts = fMonth.split("-");
@@ -899,149 +909,133 @@ window.exportPrint = function() {
       .toLocaleDateString(locale,{month:"long",year:"numeric"});
   }
 
-  // IMPORTANT: Always use ltr layout to prevent column reversal in Arabic
-  // Arabic text aligned right via CSS, but table structure stays ltr
-  const isAr = lang === "ar";
-  const font  = isAr ? "'Noto Sans Arabic', sans-serif" : "'DM Sans', sans-serif";
-  const txtal = isAr ? "right" : "left";
+  const font = isAr ? "'Noto Sans Arabic', sans-serif" : "'DM Sans', sans-serif";
 
   const printHtml = `<!DOCTYPE html>
 <html lang="${lang}" dir="ltr">
 <head>
 <meta charset="UTF-8">
 <title>Jyrrie Farm — Export</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Noto+Sans+Arabic:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Noto+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: ${font}; color: #1a2418; background: #fff; font-size: 11pt; }
-  .page { padding: 24px 28px; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:${font};color:#1a2418;background:#fff;font-size:10.5pt}
+  .page{padding:20px 24px}
 
-  /* Header */
-  .print-header { display: flex; justify-content: space-between; align-items: flex-start;
-    border-bottom: 3px solid #1a3a2a; padding-bottom: 14px; margin-bottom: 20px; }
-  .farm-logo { display: flex; align-items: center; gap: 10px; }
-  .farm-icon { font-size: 28px; }
-  .farm-name { font-size: 20pt; font-weight: 600; color: #1a3a2a; }
-  .farm-sub  { font-size: 9pt; color: #7a8c75; margin-top: 2px; }
-  .print-meta { text-align: ${isAr?"left":"right"}; font-size: 9pt; color: #7a8c75; }
-  .print-meta strong { color: #1a3a2a; }
+  /* ── Header ── */
+  .hdr{display:flex;justify-content:space-between;align-items:flex-start;
+    border-bottom:3px solid #1a3a2a;padding-bottom:12px;margin-bottom:16px}
+  .logo-row{display:flex;align-items:center;gap:10px}
+  .logo-icon{font-size:26px}
+  .farm-name{font-size:18pt;font-weight:600;color:#1a3a2a}
+  .farm-sub{font-size:9pt;color:#7a8c75;margin-top:2px;
+    ${isAr ? "direction:rtl" : ""}}
+  .meta{text-align:right;font-size:9pt;color:#7a8c75;line-height:1.6}
+  .meta b{color:#1a3a2a}
 
-  /* Stats bar */
-  .stats-bar { display: flex; gap: 12px; margin-bottom: 18px; }
-  .stat-box { flex: 1; border: 1px solid #d0ddc8; border-radius: 8px; padding: 10px 14px;
-    border-top: 4px solid #2d5a3d; }
-  .stat-box.amber { border-top-color: #c8821a; }
-  .stat-box.terra { border-top-color: #b85c38; }
-  .stat-lbl { font-size: 8pt; color: #7a8c75; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
-  .stat-val { font-size: 16pt; font-weight: 600; color: #1a3a2a; direction: ltr; unicode-bidi: embed; text-align: center; }
+  /* ── Stats ── */
+  .stats{display:flex;gap:10px;margin-bottom:16px}
+  .sbox{flex:1;border:1px solid #d0ddc8;border-radius:8px;padding:9px 12px;
+    border-top:4px solid #2d5a3d;text-align:center}
+  .sbox.am{border-top-color:#c8821a}
+  .sbox.te{border-top-color:#b85c38}
+  .slbl{font-size:7.5pt;color:#7a8c75;text-transform:uppercase;
+    letter-spacing:.3px;margin-bottom:3px;
+    ${isAr ? "text-transform:none;letter-spacing:0" : ""}}
+  .sval{font-size:15pt;font-weight:600;color:#1a3a2a;
+    direction:ltr;unicode-bidi:embed}
 
-  /* Filter info */
-  .filter-info { font-size: 9pt; color: #7a8c75; margin-bottom: 14px;
-    padding: 6px 12px; background: #f2f7f3; border-radius: 6px; display: inline-block; }
+  /* ── Filter badge ── */
+  .fbadge{display:inline-block;font-size:9pt;color:#7a8c75;
+    padding:5px 11px;background:#f2f7f3;border-radius:6px;margin-bottom:12px}
 
-  /* Table */
-  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
-  thead tr { background: #1a3a2a; color: #fff; }
-  thead th { padding: 9px 12px; text-align: ${txtal};
-    font-weight: 500; font-size: 9pt; letter-spacing: .3px; white-space: nowrap; }
-  tbody tr:nth-child(even) { background: #f5ede0; }
-  tbody tr:nth-child(odd)  { background: #fff; }
-  tbody tr:hover { background: #e8f0ea; }
-  td { padding: 8px 12px; border-bottom: 1px solid #e8d8c0; vertical-align: top; text-align: ${txtal}; }
-  td:first-child { font-weight: 500; }
-  td.num { direction: ltr; unicode-bidi: embed; text-align: ${isAr?"right":"left"}; }
-  .type-work { color: #166534; }
-  .type-expense { color: #b85c38; font-weight: 500; }
-  .amt { direction: ltr; unicode-bidi: embed; display: inline-block; }
+  /* ── Table ── */
+  table{width:100%;border-collapse:collapse;font-size:9.5pt}
+  thead tr{background:#1a3a2a;color:#fff}
+  thead th{padding:8px 11px;font-weight:500;font-size:8.5pt;
+    letter-spacing:.2px;
+    ${isAr ? "text-align:right" : "text-align:left"}}
+  tbody td{padding:7px 11px;border-bottom:1px solid #e8d8c0;
+    vertical-align:top;
+    ${isAr ? "text-align:right" : "text-align:left"}}
+  .tot td{background:#1a3a2a!important;color:#fff;
+    border:none;padding:9px 11px;font-weight:600}
 
-  /* Totals row */
-  .totals-row { background: #1a3a2a !important; color: #fff; }
-  .totals-row td { border: none; padding: 10px 12px; font-weight: 600; }
+  /* ── Footer ── */
+  .ftr{margin-top:20px;padding-top:10px;border-top:1px solid #d0ddc8;
+    display:flex;justify-content:space-between;font-size:8pt;color:#aaa}
 
-  /* Footer */
-  .print-footer { margin-top: 24px; padding-top: 12px;
-    border-top: 1px solid #d0ddc8; display: flex; justify-content: space-between;
-    font-size: 8pt; color: #7a8c75; }
-
-  @page { margin: 1.5cm; size: A4 portrait; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @page{margin:1.2cm;size:A4 portrait}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 </head>
-<body>
-<div class="page">
+<body><div class="page">
 
-  <div class="print-header">
-    <div class="farm-logo">
-      <span class="farm-icon">🌿</span>
-      <div>
-        <div class="farm-name">Jyrrie Farm</div>
-        <div class="farm-sub">${lang==="ar"?"إدارة الموظفين":lang==="fr"?"Gestion des employés":"Mitarbeiterverwaltung"}</div>
-      </div>
-    </div>
-    <div class="print-meta">
-      <strong>${lang==="ar"?"تاريخ التصدير":lang==="fr"?"Date d'export":"Exportdatum"}</strong><br>
-      ${dateStr} · ${timeStr}<br>
-      ${lang==="ar"?"إجمالي السجلات":lang==="fr"?"Total entrées":"Einträge gesamt"}: <strong>${filtered.length}</strong>
+<div class="hdr">
+  <div class="logo-row">
+    <span class="logo-icon">🌿</span>
+    <div>
+      <div class="farm-name">Jyrrie Farm</div>
+      <div class="farm-sub">${isAr?"إدارة الموظفين":isFr?"Gestion des employés":"Mitarbeiterverwaltung"}</div>
     </div>
   </div>
-
-  <div class="stats-bar">
-    <div class="stat-box">
-      <div class="stat-lbl">${lang==="ar"?"أيام العمل":lang==="fr"?"Jours travaillés":"Arbeitstage"}</div>
-      <div class="stat-val">${totalDays.toFixed(1)}</div>
-    </div>
-    <div class="stat-box amber">
-      <div class="stat-lbl">${lang==="ar"?"إجمالي الأجور":lang==="fr"?"Coût salarial":"Lohnkosten"}</div>
-      <div class="stat-val">${fmtAmt(totalWages)}</div>
-    </div>
-    <div class="stat-box terra">
-      <div class="stat-lbl">${lang==="ar"?"إجمالي المصاريف":lang==="fr"?"Dépenses":"Ausgaben"}</div>
-      <div class="stat-val">${fmtAmt(totalExp)}</div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-lbl">${lang==="ar"?"الإجمالي":lang==="fr"?"Total":"Gesamt"}</div>
-      <div class="stat-val">${fmtAmt(totalWages + totalExp)}</div>
-    </div>
+  <div class="meta">
+    <b>${isAr?"تاريخ التصدير":isFr?"Date d'export":"Exportdatum"}</b><br>
+    ${dateStr} · ${timeStr}<br>
+    ${isAr?"عدد السجلات":isFr?"Total":"Einträge"}: <b>${filtered.length}</b>
   </div>
+</div>
 
-  ${filterInfo ? '<div class="filter-info">📅 ' + filterInfo + '</div>' : ''}
-
-  <table>
-    <thead>
-      <tr>
-        <th>${t.cols[0]}</th>
-        <th>${t.cols[1]}</th>
-        <th>${t.cols[2]}</th>
-        <th>${t.cols[3]}</th>
-        <th>${t.cols[4]}</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-      <tr class="totals-row">
-        <td colspan="3">${lang==="ar"?"الإجمالي":lang==="fr"?"Total":"Gesamt"}</td>
-        <td><span class="amt">${fmtAmt(totalWages + totalExp)}</span></td>
-        <td><span class="amt">${totalDays.toFixed(1)} ${lang==="ar"?"يوم":lang==="fr"?"jour(s)":"Tag(e)"}</span></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="print-footer">
-    <span>belmancoder.github.io/jyrrie-farm</span>
-    <span>${lang==="ar"?"تم إنشاؤه بواسطة Jyrrie Farm":lang==="fr"?"Généré par Jyrrie Farm":"Erstellt von Jyrrie Farm"}</span>
-    <span>${dateStr}</span>
+<div class="stats">
+  <div class="sbox">
+    <div class="slbl">${isAr?"أيام العمل":isFr?"Jours":"Arbeitstage"}</div>
+    <div class="sval">${totalDays.toFixed(1)}</div>
   </div>
+  <div class="sbox am">
+    <div class="slbl">${isAr?"إجمالي الأجور":isFr?"Salaires":"Lohnkosten"}</div>
+    <div class="sval">${fmtAmt(totalWages)}</div>
+  </div>
+  <div class="sbox te">
+    <div class="slbl">${isAr?"المصاريف":isFr?"Dépenses":"Ausgaben"}</div>
+    <div class="sval">${fmtAmt(totalExp)}</div>
+  </div>
+  <div class="sbox" style="border-top-color:#1a3a2a">
+    <div class="slbl">${isAr?"الإجمالي":isFr?"Total":"Gesamt"}</div>
+    <div class="sval">${fmtAmt(grandTotal)}</div>
+  </div>
+</div>
+
+${filterInfo ? '<div class="fbadge">📅 ' + filterInfo + '</div>' : ''}
+
+<table>
+  <thead><tr>${colHdrs.map(function(h){return "<th>"+h+"</th>";}).join("")}</tr></thead>
+  <tbody>
+    ${rows}
+    <tr class="tot">
+      ${isAr
+        ? '<td>' + (e_notes_placeholder = isAr?"يوم":isFr?"jour(s)":"Tag(e)", totalDays.toFixed(1) + " " + (isAr?"يوم":isFr?"jour(s)":"Tag(e)")) + '</td>'
+          + '<td>' + fmtAmt(grandTotal) + '</td>'
+          + '<td colspan="3">' + (isAr?"الإجمالي":isFr?"Total":"Gesamt") + '</td>'
+        : '<td colspan="3">' + (isAr?"الإجمالي":isFr?"Total":"Gesamt") + '</td>'
+          + '<td>' + fmtAmt(grandTotal) + '</td>'
+          + '<td>' + totalDays.toFixed(1) + " " + (isAr?"يوم":isFr?"jour(s)":"Tag(e)") + '</td>'
+      }
+    </tr>
+  </tbody>
+</table>
+
+<div class="ftr">
+  <span>belmancoder.github.io/jyrrie-farm</span>
+  <span>${isAr?"تم الإنشاء بواسطة Jyrrie Farm":isFr?"Généré par Jyrrie Farm":"Erstellt von Jyrrie Farm"}</span>
+  <span>${dateStr}</span>
+</div>
 </div>
 <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>
 </body></html>`;
 
   const w = window.open("", "_blank");
-  if (w) {
-    w.document.write(printHtml);
-    w.document.close();
-  } else {
-    toast("⚠ Popup blockiert — bitte Popups erlauben.");
-  }
+  if (w) { w.document.write(printHtml); w.document.close(); }
+  else { toast("⚠ Popup blockiert — bitte Popups erlauben."); }
 };
 
 // ── TABS ──────────────────────────────────────────────────────
