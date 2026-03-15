@@ -885,7 +885,7 @@ window.exportPrint = function() {
       + "<td>" + e.name + "</td>"
       + "<td>" + fmtDate(e.date) + "</td>"
       + "<td>" + typeTxt + "</td>"
-      + "<td>" + detailTxt + "</td>"
+      + "<td><span dir=\"ltr\" style=\"unicode-bidi:embed\">" + detailTxt + "</span></td>"
       + "<td>" + (e.notes || "—") + "</td>"
       + "</tr>";
   }).join("");
@@ -929,7 +929,7 @@ window.exportPrint = function() {
   .stat-box.amber { border-top-color: #c8821a; }
   .stat-box.terra { border-top-color: #b85c38; }
   .stat-lbl { font-size: 8pt; color: #7a8c75; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
-  .stat-val { font-size: 16pt; font-weight: 600; color: #1a3a2a; }
+  .stat-val { font-size: 16pt; font-weight: 600; color: #1a3a2a; direction: ltr; unicode-bidi: embed; }
 
   /* Filter info */
   .filter-info { font-size: 9pt; color: #7a8c75; margin-bottom: 14px;
@@ -1015,7 +1015,7 @@ window.exportPrint = function() {
       ${rows}
       <tr class="totals-row">
         <td colspan="3">${lang==="ar"?"الإجمالي":lang==="fr"?"Total":"Gesamt"}</td>
-        <td>${fmtAmt(totalWages + totalExp)}</td>
+        <td><span dir="ltr" style="unicode-bidi:embed">${fmtAmt(totalWages + totalExp)}</span></td>
         <td>${totalDays.toFixed(1)} ${lang==="ar"?"يوم":lang==="fr"?"jour(s)":"Tag(e)"}</td>
       </tr>
     </tbody>
