@@ -869,23 +869,24 @@ window.exportPrint = function() {
   const totalWages = filtered.reduce(function(s,e){ return s+getRate(e.name)*(e.day||0); },0);
   const totalExp   = filtered.reduce(function(s,e){ return s+(e.expenses||0); },0);
 
-  // Build rows
+  // Build rows — keep numbers in ltr, text in natural direction
   const rows = filtered.map(function(e) {
     const type   = e.type || (e.expenses > 0 ? "expense" : "work");
     const isWork = type === "work";
     const earned = isWork ? getRate(e.name) * (e.day || 0) : null;
     const dayLbl = e.day === 1 ? t.fullBadge : t.halfBadge;
+    // Separate day label and amount so RTL doesn't mix them
     const detailTxt = isWork
-      ? dayLbl + "  ·  " + fmtAmt(earned)
-      : fmtAmt(e.expenses);
+      ? '<span dir="rtl">' + dayLbl + '</span> &nbsp;<span class="amt">' + fmtAmt(earned) + '</span>'
+      : '<span class="amt">' + fmtAmt(e.expenses) + '</span>';
     const typeTxt = isWork
       ? (lang==="ar"?"عمل":lang==="fr"?"Travail":"Arbeitstag")
       : (lang==="ar"?"مصاريف":lang==="fr"?"Dépense":"Ausgaben");
     return "<tr>"
       + "<td>" + e.name + "</td>"
-      + "<td>" + fmtDate(e.date) + "</td>"
+      + "<td class=\"num\">" + fmtDate(e.date) + "</td>"
       + "<td>" + typeTxt + "</td>"
-      + "<td><span dir=\"ltr\" style=\"unicode-bidi:embed\">" + detailTxt + "</span></td>"
+      + "<td>" + detailTxt + "</td>"
       + "<td>" + (e.notes || "—") + "</td>"
       + "</tr>";
   }).join("");
@@ -898,11 +899,14 @@ window.exportPrint = function() {
       .toLocaleDateString(locale,{month:"long",year:"numeric"});
   }
 
-  const dir  = lang === "ar" ? "rtl" : "ltr";
-  const font = lang === "ar" ? "'Noto Sans Arabic', sans-serif" : "'DM Sans', sans-serif";
+  // IMPORTANT: Always use ltr layout to prevent column reversal in Arabic
+  // Arabic text aligned right via CSS, but table structure stays ltr
+  const isAr = lang === "ar";
+  const font  = isAr ? "'Noto Sans Arabic', sans-serif" : "'DM Sans', sans-serif";
+  const txtal = isAr ? "right" : "left";
 
   const printHtml = `<!DOCTYPE html>
-<html lang="${lang}" dir="${dir}">
+<html lang="${lang}" dir="ltr">
 <head>
 <meta charset="UTF-8">
 <title>Jyrrie Farm — Export</title>
@@ -919,7 +923,7 @@ window.exportPrint = function() {
   .farm-icon { font-size: 28px; }
   .farm-name { font-size: 20pt; font-weight: 600; color: #1a3a2a; }
   .farm-sub  { font-size: 9pt; color: #7a8c75; margin-top: 2px; }
-  .print-meta { text-align: ${lang==="ar"?"left":"right"}; font-size: 9pt; color: #7a8c75; }
+  .print-meta { text-align: ${isAr?"left":"right"}; font-size: 9pt; color: #7a8c75; }
   .print-meta strong { color: #1a3a2a; }
 
   /* Stats bar */
@@ -929,7 +933,7 @@ window.exportPrint = function() {
   .stat-box.amber { border-top-color: #c8821a; }
   .stat-box.terra { border-top-color: #b85c38; }
   .stat-lbl { font-size: 8pt; color: #7a8c75; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
-  .stat-val { font-size: 16pt; font-weight: 600; color: #1a3a2a; direction: ltr; unicode-bidi: embed; }
+  .stat-val { font-size: 16pt; font-weight: 600; color: #1a3a2a; direction: ltr; unicode-bidi: embed; text-align: center; }
 
   /* Filter info */
   .filter-info { font-size: 9pt; color: #7a8c75; margin-bottom: 14px;
@@ -938,16 +942,17 @@ window.exportPrint = function() {
   /* Table */
   table { width: 100%; border-collapse: collapse; font-size: 10pt; }
   thead tr { background: #1a3a2a; color: #fff; }
-  thead th { padding: 9px 12px; text-align: ${lang==="ar"?"right":"left"};
+  thead th { padding: 9px 12px; text-align: ${txtal};
     font-weight: 500; font-size: 9pt; letter-spacing: .3px; white-space: nowrap; }
   tbody tr:nth-child(even) { background: #f5ede0; }
   tbody tr:nth-child(odd)  { background: #fff; }
   tbody tr:hover { background: #e8f0ea; }
-  td { padding: 8px 12px; border-bottom: 1px solid #e8d8c0; vertical-align: top; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e8d8c0; vertical-align: top; text-align: ${txtal}; }
   td:first-child { font-weight: 500; }
+  td.num { direction: ltr; unicode-bidi: embed; text-align: ${isAr?"right":"left"}; }
   .type-work { color: #166534; }
-  .type-expense { color: #b85c38; }
-  .detail-cell { font-weight: 500; }
+  .type-expense { color: #b85c38; font-weight: 500; }
+  .amt { direction: ltr; unicode-bidi: embed; display: inline-block; }
 
   /* Totals row */
   .totals-row { background: #1a3a2a !important; color: #fff; }
@@ -1015,8 +1020,8 @@ window.exportPrint = function() {
       ${rows}
       <tr class="totals-row">
         <td colspan="3">${lang==="ar"?"الإجمالي":lang==="fr"?"Total":"Gesamt"}</td>
-        <td><span dir="ltr" style="unicode-bidi:embed">${fmtAmt(totalWages + totalExp)}</span></td>
-        <td>${totalDays.toFixed(1)} ${lang==="ar"?"يوم":lang==="fr"?"jour(s)":"Tag(e)"}</td>
+        <td><span class="amt">${fmtAmt(totalWages + totalExp)}</span></td>
+        <td><span class="amt">${totalDays.toFixed(1)} ${lang==="ar"?"يوم":lang==="fr"?"jour(s)":"Tag(e)"}</span></td>
       </tr>
     </tbody>
   </table>
