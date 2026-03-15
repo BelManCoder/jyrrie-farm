@@ -203,7 +203,7 @@ function updateAllText(){
 function toast(msg){var el=document.getElementById("toast");el.textContent=msg;el.classList.add("show");setTimeout(function(){el.classList.remove("show");},3000);}
 function today(){return new Date().toISOString().split("T")[0];}
 function getRate(name){return rates[name]!==undefined?rates[name]:(rates.defaultRate||200);}
-function fmtDate(d){var l=lang==="ar"?"ar-MA":lang==="fr"?"fr-FR":"de-DE";return new Date(d+"T00:00:00").toLocaleDateString(l,{day:"2-digit",month:"2-digit",year:"numeric"});}
+function fmtDate(d){return new Date(d+"T00:00:00").toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});}
 function fmtAmt(v){return Number(v).toFixed(0)+" "+CURRENCY;}
 function fmtMoney(v){var n=Number(v);return(n%1===0?n.toFixed(0):n.toFixed(2))+" "+CURRENCY;}
 function fmtMoneyInt(v){return Number(v).toFixed(0)+" "+CURRENCY;}
@@ -380,7 +380,7 @@ function renderTable(){
     var rb=idx%2===0?"":"class='odd-row'";
     return "<tr "+rb+">"
       +"<td data-label='"+c0+"' class='td-name'>"+e.name+"</td>"
-      +"<td data-label='"+c1+"'>"+fmtDate(e.date)+"</td>"
+      +"<td data-label='"+c1+"'><span dir='ltr'>"+fmtDate(e.date)+"</span></td>"
       +"<td data-label='"+c2+"'>"+tb+"</td>"
       +"<td data-label='"+c3+"'>"+det+"</td>"
       +"<td data-label='"+c4+"' class='td-note'><span class='note-text'>"+(e.notes||"—")+"</span></td>"
@@ -418,8 +418,8 @@ function renderMonthly(){
     var rl=new Date(parseInt(parts[0]),parseInt(parts[1])-1).toLocaleDateString(locale,{month:"long",year:"numeric"});
     var label=lang==="ar"?rl:rl.toUpperCase();
     var sd=data.dates.slice().sort();
-    var df=new Date(sd[0]+"T00:00:00").toLocaleDateString(locale,{day:"2-digit",month:"2-digit",year:"numeric"});
-    var dt=new Date(sd[sd.length-1]+"T00:00:00").toLocaleDateString(locale,{day:"2-digit",month:"2-digit",year:"numeric"});
+    var df=new Date(sd[0]+"T00:00:00").toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
+    var dt=new Date(sd[sd.length-1]+"T00:00:00").toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
     var dr=df===dt?df:df+" – "+dt;
     var tw=Object.values(data.workers).reduce(function(s,w){return s+w.wage;},0);
     var te=data.expensesList.reduce(function(s,e){return s+e.amount;},0);
