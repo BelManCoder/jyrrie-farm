@@ -1829,11 +1829,21 @@ body.rtl .ys-amt{text-align:left}
   }
   td.td-photo::before{
     margin-bottom:2px;
+    margin-inline-end:0;
     font-size:12px;
     font-weight:600;
     color:var(--green-deep);
     text-transform:none;
     letter-spacing:0;
+    display:block;
+    width:100%;
+  }
+  body.rtl td.td-photo::before{
+    text-align:right;
+    margin-inline-start:0;
+  }
+  body.rtl td.td-photo .photo-thumbs{
+    justify-content:flex-end;
   }
   td.td-photo .photo-thumbs{
     justify-content:flex-start;
