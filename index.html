@@ -312,8 +312,10 @@ function fmtDateTime(ts) {
     + " " + d.toLocaleTimeString(locale, {hour:"2-digit",minute:"2-digit"});
 }
 
-// ── PHOTO COMPRESS & UPLOAD ──────────────────────────────────
-let pendingPhotoFile = null;  // holds the File to upload on save
+// ── PHOTO COMPRESS & UPLOAD (MULTI) ──────────────────────────
+let pendingPhotoFiles = [];    // new files to upload
+let existingPhotos    = [];    // already saved photos [{url, path}]
+let photosToDelete    = [];    // paths to delete on save
 
 function compressImage(file, maxW, quality) {
   maxW = maxW || 1200;
@@ -333,7 +335,7 @@ function compressImage(file, maxW, quality) {
 }
 
 async function uploadPhoto(blob, entryId) {
-  const path = "photos/" + entryId + "_" + Date.now() + ".jpg";
+  const path = "photos/" + entryId + "_" + Date.now() + "_" + Math.random().toString(36).slice(2,6) + ".jpg";
   const sRef = storageRef(storage, path);
   await uploadBytes(sRef, blob);
   const url = await getDownloadURL(sRef);
@@ -345,51 +347,104 @@ async function deletePhoto(path) {
   try { await deleteObject(storageRef(storage, path)); } catch(e) { console.warn("Photo delete:", e); }
 }
 
+// Helper: get photos array from entry (supports old single-photo format)
+function getEntryPhotos(e) {
+  if (e.photos && e.photos.length) return e.photos;
+  if (e.photoURL) return [{ url: e.photoURL, path: e.photoPath || "" }];
+  return [];
+}
+
 window.onPhotoSelected = function(input) {
-  const file = input.files && input.files[0];
-  const preview = document.getElementById("photoPreview");
-  const removeBtn = document.getElementById("photoRemoveBtn");
-  if (!file) {
-    pendingPhotoFile = null;
-    if (preview) { preview.src = ""; preview.style.display = "none"; }
-    if (removeBtn) removeBtn.style.display = "none";
-    return;
+  const files = input.files;
+  if (!files || !files.length) return;
+  for (let i = 0; i < files.length; i++) {
+    pendingPhotoFiles.push(files[i]);
   }
-  pendingPhotoFile = file;
-  const reader = new FileReader();
-  reader.onload = function(ev) {
-    if (preview) { preview.src = ev.target.result; preview.style.display = "block"; }
-    if (removeBtn) removeBtn.style.display = "inline-block";
-  };
-  reader.readAsDataURL(file);
+  input.value = "";
+  renderPhotoPreview();
 };
 
-window.removePhotoPreview = function() {
-  pendingPhotoFile = null;
-  const input = document.getElementById("f_photo");
-  if (input) input.value = "";
-  const preview = document.getElementById("photoPreview");
-  if (preview) { preview.src = ""; preview.style.display = "none"; }
-  const removeBtn = document.getElementById("photoRemoveBtn");
-  if (removeBtn) removeBtn.style.display = "none";
-  // Mark for removal on update
-  window._removeExistingPhoto = true;
+window.removeNewPhoto = function(idx) {
+  pendingPhotoFiles.splice(idx, 1);
+  renderPhotoPreview();
 };
 
-// ── LIGHTBOX ─────────────────────────────────────────────────
-window.openLightbox = function(url) {
-  const overlay = document.getElementById("lightboxOverlay");
-  const img = document.getElementById("lightboxImg");
-  if (overlay && img) {
-    img.src = url;
-    overlay.classList.add("open");
-  }
+window.removeExistingPhoto = function(idx) {
+  const removed = existingPhotos.splice(idx, 1)[0];
+  if (removed && removed.path) photosToDelete.push(removed.path);
+  renderPhotoPreview();
+};
+
+function renderPhotoPreview() {
+  const container = document.getElementById("photoPreviewGrid");
+  if (!container) return;
+  let html = "";
+
+  // Existing photos (already uploaded)
+  existingPhotos.forEach(function(p, i) {
+    html += '<div class="photo-preview-item">'
+      + '<img src="' + p.url + '" alt="Foto" class="photo-preview-img">'
+      + '<button type="button" class="btn-photo-item-remove" onclick="removeExistingPhoto(' + i + ')">✕</button>'
+      + '</div>';
+  });
+
+  // New pending files (not yet uploaded)
+  pendingPhotoFiles.forEach(function(file, i) {
+    const dataUrl = URL.createObjectURL(file);
+    html += '<div class="photo-preview-item">'
+      + '<img src="' + dataUrl + '" alt="Neu" class="photo-preview-img photo-preview-new">'
+      + '<button type="button" class="btn-photo-item-remove" onclick="removeNewPhoto(' + i + ')">✕</button>'
+      + '</div>';
+  });
+
+  container.innerHTML = html;
+  container.style.display = (existingPhotos.length || pendingPhotoFiles.length) ? "flex" : "none";
+}
+
+// ── LIGHTBOX (MULTI) ─────────────────────────────────────────
+let lightboxPhotos = [];
+let lightboxIndex  = 0;
+
+window.openLightbox = function(photosJson, startIdx) {
+  lightboxPhotos = typeof photosJson === "string" ? JSON.parse(photosJson) : photosJson;
+  lightboxIndex  = startIdx || 0;
+  updateLightboxImg();
+  document.getElementById("lightboxOverlay").classList.add("open");
 };
 window.closeLightbox = function() {
-  const overlay = document.getElementById("lightboxOverlay");
-  if (overlay) overlay.classList.remove("open");
+  document.getElementById("lightboxOverlay").classList.remove("open");
   document.getElementById("lightboxImg").src = "";
+  lightboxPhotos = [];
 };
+window.lightboxPrev = function(ev) {
+  ev.stopPropagation();
+  lightboxIndex = (lightboxIndex - 1 + lightboxPhotos.length) % lightboxPhotos.length;
+  updateLightboxImg();
+};
+window.lightboxNext = function(ev) {
+  ev.stopPropagation();
+  lightboxIndex = (lightboxIndex + 1) % lightboxPhotos.length;
+  updateLightboxImg();
+};
+function updateLightboxImg() {
+  const img = document.getElementById("lightboxImg");
+  const counter = document.getElementById("lightboxCounter");
+  const prevBtn = document.getElementById("lightboxPrev");
+  const nextBtn = document.getElementById("lightboxNext");
+  if (img) img.src = lightboxPhotos[lightboxIndex].url || lightboxPhotos[lightboxIndex];
+  if (counter) counter.textContent = (lightboxIndex + 1) + " / " + lightboxPhotos.length;
+  const multi = lightboxPhotos.length > 1;
+  if (prevBtn) prevBtn.style.display = multi ? "flex" : "none";
+  if (nextBtn) nextBtn.style.display = multi ? "flex" : "none";
+  if (counter) counter.style.display = multi ? "block" : "none";
+}
+// Keyboard navigation
+document.addEventListener("keydown", function(ev) {
+  if (!document.getElementById("lightboxOverlay").classList.contains("open")) return;
+  if (ev.key === "Escape") window.closeLightbox();
+  if (ev.key === "ArrowLeft") { lightboxIndex = (lightboxIndex - 1 + lightboxPhotos.length) % lightboxPhotos.length; updateLightboxImg(); }
+  if (ev.key === "ArrowRight") { lightboxIndex = (lightboxIndex + 1) % lightboxPhotos.length; updateLightboxImg(); }
+});
 
 function showLoading(msg) {
   document.getElementById("loadingText").textContent = msg;
@@ -477,33 +532,40 @@ async function saveEntry() {
   if (btn) btn.disabled = true;
   try {
     if (editingId) {
-      // Handle photo removal or replacement
-      if (window._removeExistingPhoto) {
-        const old = entries.find(function(x) { return x.id === editingId; });
-        if (old && old.photoPath) await deletePhoto(old.photoPath);
-        payload.photoURL = null;
-        payload.photoPath = null;
+      // Delete removed photos from storage
+      for (let i = 0; i < photosToDelete.length; i++) {
+        await deletePhoto(photosToDelete[i]);
       }
-      if (pendingPhotoFile) {
+      // Upload new photos
+      let allPhotos = existingPhotos.slice();
+      if (pendingPhotoFiles.length) {
         toast(t.photoUploading);
-        const old = entries.find(function(x) { return x.id === editingId; });
-        if (old && old.photoPath) await deletePhoto(old.photoPath);
-        const blob = await compressImage(pendingPhotoFile);
-        const photo = await uploadPhoto(blob, editingId);
-        payload.photoURL = photo.url;
-        payload.photoPath = photo.path;
+        for (let i = 0; i < pendingPhotoFiles.length; i++) {
+          const blob = await compressImage(pendingPhotoFiles[i]);
+          const photo = await uploadPhoto(blob, editingId);
+          allPhotos.push(photo);
+        }
       }
+      payload.photos = allPhotos;
+      // Clean old single-photo fields
+      payload.photoURL = null;
+      payload.photoPath = null;
       await updateDoc(doc(db, "entries", editingId), payload);
       toast(t.toastUpdated);
     } else {
       payload.createdAt = Date.now();
       payload.updatedAt = Date.now();
+      payload.photos = [];
       const docRef = await addDoc(entriesRef, payload);
-      if (pendingPhotoFile) {
+      if (pendingPhotoFiles.length) {
         toast(t.photoUploading);
-        const blob = await compressImage(pendingPhotoFile);
-        const photo = await uploadPhoto(blob, docRef.id);
-        await updateDoc(doc(db, "entries", docRef.id), { photoURL: photo.url, photoPath: photo.path });
+        const uploaded = [];
+        for (let i = 0; i < pendingPhotoFiles.length; i++) {
+          const blob = await compressImage(pendingPhotoFiles[i]);
+          const photo = await uploadPhoto(blob, docRef.id);
+          uploaded.push(photo);
+        }
+        await updateDoc(doc(db, "entries", docRef.id), { photos: uploaded });
       }
       toast(t.toastSaved);
     }
@@ -516,7 +578,12 @@ async function deleteEntry(id) {
   if (!confirm(t.confirmDelete)) return;
   try {
     const e = entries.find(function(x) { return x.id === id; });
-    if (e && e.photoPath) await deletePhoto(e.photoPath);
+    if (e) {
+      const photos = getEntryPhotos(e);
+      for (let i = 0; i < photos.length; i++) {
+        if (photos[i].path) await deletePhoto(photos[i].path);
+      }
+    }
     await deleteDoc(doc(db, "entries", id));
     toast(t.toastDeleted);
   } catch(e) { toast("⚠ " + e.message); }
@@ -533,15 +600,14 @@ window.clearForm = function() {
   document.getElementById("f_date").value = today();
   const fd = document.getElementById("f_day");
   if (fd) fd.value = "1";
-  // Reset photo
-  pendingPhotoFile = null;
-  window._removeExistingPhoto = false;
+  // Reset photos
+  pendingPhotoFiles = [];
+  existingPhotos    = [];
+  photosToDelete    = [];
   const photoInput = document.getElementById("f_photo");
   if (photoInput) photoInput.value = "";
-  const preview = document.getElementById("photoPreview");
-  if (preview) { preview.src = ""; preview.style.display = "none"; }
-  const removeBtn = document.getElementById("photoRemoveBtn");
-  if (removeBtn) removeBtn.style.display = "none";
+  const previewGrid = document.getElementById("photoPreviewGrid");
+  if (previewGrid) { previewGrid.innerHTML = ""; previewGrid.style.display = "none"; }
 
   editingId   = null;
   currentType = "work";
@@ -570,18 +636,11 @@ window.editEntry = function(id) {
     document.getElementById("f_expenses").value    = e.expenses || "";
     document.getElementById("f_notes_expense").value = e.notes || "";
   }
-  // Show existing photo
-  pendingPhotoFile = null;
-  window._removeExistingPhoto = false;
-  const preview = document.getElementById("photoPreview");
-  const removeBtn = document.getElementById("photoRemoveBtn");
-  if (e.photoURL) {
-    if (preview) { preview.src = e.photoURL; preview.style.display = "block"; }
-    if (removeBtn) removeBtn.style.display = "inline-block";
-  } else {
-    if (preview) { preview.src = ""; preview.style.display = "none"; }
-    if (removeBtn) removeBtn.style.display = "none";
-  }
+  // Show existing photos
+  pendingPhotoFiles = [];
+  photosToDelete    = [];
+  existingPhotos    = getEntryPhotos(e).slice();
+  renderPhotoPreview();
   const btn = document.querySelector("[data-save]");
   if (btn) btn.textContent = t.update;
   window.showTabMobile("new");
@@ -733,9 +792,23 @@ function renderTable() {
       : "";
 
     const rowBg = idx % 2 === 0 ? '' : ' class="odd-row"';
-    const photoCell = e.photoURL
-      ? '<img src="' + e.photoURL + '" class="photo-thumb" onclick="openLightbox(\'' + e.photoURL + '\')" alt="Foto" loading="lazy">'
-      : '<span class="photo-none">' + t.photoNoPhoto + '</span>';
+    const photos = getEntryPhotos(e);
+    let photoCell = '';
+    if (photos.length > 0) {
+      const photosJson = JSON.stringify(photos).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+      photoCell = '<div class="photo-thumbs">';
+      photos.forEach(function(p, pi) {
+        if (pi < 3) {
+          photoCell += '<img src="' + p.url + '" class="photo-thumb" onclick="openLightbox(' + photosJson + ',' + pi + ')" alt="Foto" loading="lazy">';
+        }
+      });
+      if (photos.length > 3) {
+        photoCell += '<span class="photo-more" onclick="openLightbox(' + photosJson + ',3)">+' + (photos.length - 3) + '</span>';
+      }
+      photoCell += '</div>';
+    } else {
+      photoCell = '<span class="photo-none">' + t.photoNoPhoto + '</span>';
+    }
 
     return '<tr' + rowBg + '>'
       + '<td data-label="' + colName   + '" class="td-name">' + e.name + '</td>'
@@ -977,7 +1050,8 @@ window.exportCSV = function() {
     const type    = e.type || (e.expenses > 0 ? "expense" : "work");
     const typeLbl = type === "work" ? t.btnWork.replace(/^\S+\s/,"") : t.btnExpense.replace(/^\S+\s/,"");
     const details = type === "work" ? (e.day + " " + t.dayUnit) : fmtAmt(e.expenses);
-    lines.push([e.name, e.date, typeLbl, details, e.notes || "", e.photoURL || "", fmtDateTime(e.updatedAt || e.createdAt)]);
+    const photoUrls = getEntryPhotos(e).map(function(p) { return p.url; }).join(" | ");
+    lines.push([e.name, e.date, typeLbl, details, e.notes || "", photoUrls, fmtDateTime(e.updatedAt || e.createdAt)]);
   });
   const csv  = lines.map(function(r) { return r.map(function(c) { return '"' + c + '"'; }).join(","); }).join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -1384,9 +1458,12 @@ td{padding:10px 14px;font-size:14px;vertical-align:middle}
 .btn-edit{background:transparent;border:1px solid var(--border);color:var(--green-mid);font-size:12px;padding:4px 10px}
 .btn-edit:hover{background:var(--green-mist)}
 
-/* ── PHOTO THUMBNAIL ──────────────────────────────── */
-.photo-thumb{width:44px;height:44px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--border);transition:transform .18s,box-shadow .18s}
-.photo-thumb:hover{transform:scale(1.08);box-shadow:0 2px 10px rgba(0,0,0,.2)}
+/* ── PHOTO THUMBNAILS (MULTI) ─────────────────────── */
+.photo-thumbs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:center}
+.photo-thumb{width:40px;height:40px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid var(--border);transition:transform .18s,box-shadow .18s}
+.photo-thumb:hover{transform:scale(1.1);box-shadow:0 2px 10px rgba(0,0,0,.2);z-index:1}
+.photo-more{width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:var(--green-mist);border:2px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;color:var(--green-deep);cursor:pointer}
+.photo-more:hover{background:var(--green-light);color:#fff}
 .photo-none{font-size:13px;color:var(--text-muted)}
 .td-photo{text-align:center;vertical-align:middle}
 
@@ -1396,16 +1473,26 @@ td{padding:10px 14px;font-size:14px;vertical-align:middle}
 .btn-photo-capture{display:flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;border:2px dashed var(--border);background:var(--green-mist);color:var(--green-deep);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .2s}
 .btn-photo-capture:hover{border-color:var(--green-light);background:#e0f0e6}
 .photo-capture-icon{font-size:20px}
-.photo-preview-img{width:64px;height:64px;object-fit:cover;border-radius:10px;border:2px solid var(--green-light)}
-.btn-photo-remove{background:var(--terracotta);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .18s}
-.btn-photo-remove:hover{background:#963a1e}
 
-/* ── LIGHTBOX ─────────────────────────────────────── */
-.lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:10000;display:none;align-items:center;justify-content:center;padding:20px}
+/* ── PHOTO PREVIEW GRID ──────────────────────────── */
+.photo-preview-grid{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;padding:12px;background:var(--sand);border-radius:10px;border:1px solid var(--border)}
+.photo-preview-item{position:relative;display:inline-block}
+.photo-preview-item .photo-preview-img{width:68px;height:68px;object-fit:cover;border-radius:8px;border:2px solid var(--green-light);display:block}
+.photo-preview-item .photo-preview-new{border-color:var(--amber);border-style:dashed}
+.btn-photo-item-remove{position:absolute;top:-6px;right:-6px;background:var(--terracotta);color:#fff;border:2px solid #fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0;transition:background .18s}
+.btn-photo-item-remove:hover{background:#963a1e}
+
+/* ── LIGHTBOX (MULTI) ─────────────────────────────── */
+.lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:10000;display:none;align-items:center;justify-content:center;padding:20px}
 .lightbox-overlay.open{display:flex}
-.lightbox-img{max-width:92vw;max-height:88vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);object-fit:contain}
+.lightbox-img{max-width:88vw;max-height:82vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);object-fit:contain}
 .lightbox-close{position:fixed;top:16px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:24px;width:44px;height:44px;border-radius:50%;cursor:pointer;z-index:10001;display:flex;align-items:center;justify-content:center;transition:background .2s}
 .lightbox-close:hover{background:rgba(255,255,255,.3)}
+.lightbox-nav{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:none;color:#fff;font-size:36px;width:50px;height:50px;border-radius:50%;cursor:pointer;z-index:10001;display:flex;align-items:center;justify-content:center;transition:background .2s}
+.lightbox-nav:hover{background:rgba(255,255,255,.3)}
+.lightbox-prev{left:16px}
+.lightbox-next{right:16px}
+.lightbox-counter{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.8);font-size:14px;font-weight:500;background:rgba(0,0,0,.5);padding:6px 16px;border-radius:20px;z-index:10001}
 
 /* ── MONTHLY OVERVIEW NEW ─────────────────────────── */
 .month-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
@@ -1646,7 +1733,9 @@ body.rtl .ys-amt{text-align:left}
     line-height:1.5;
   }
   td.td-photo{justify-content:flex-end;padding:10px 14px}
-  td.td-photo .photo-thumb{width:52px;height:52px;border-radius:10px}
+  td.td-photo .photo-thumbs{justify-content:flex-end}
+  td.td-photo .photo-thumb{width:48px;height:48px;border-radius:8px}
+  td.td-photo .photo-more{width:48px;height:48px;font-size:13px}
   td.td-ts{font-size:11px}
   td.td-act{border-bottom:none;justify-content:flex-end;padding:8px 12px;background:var(--sand);border-radius:0 0 10px 10px}
   td.td-act::before{display:none}
@@ -1656,8 +1745,13 @@ body.rtl .ys-amt{text-align:left}
   /* Photo upload mobile */
   .photo-upload-area{flex-direction:row;align-items:center}
   .btn-photo-capture{width:100%;justify-content:center;padding:14px;font-size:15px;border-radius:12px}
-  .photo-preview-img{width:72px;height:72px}
+  .photo-preview-grid{gap:8px;padding:10px}
+  .photo-preview-item .photo-preview-img{width:60px;height:60px}
   .lightbox-close{top:12px;right:12px;width:40px;height:40px;font-size:22px}
+  .lightbox-nav{width:42px;height:42px;font-size:28px}
+  .lightbox-prev{left:8px}
+  .lightbox-next{right:8px}
+  .lightbox-counter{bottom:16px;font-size:13px}
 
   /* Export */
   .export-bar{padding:10px 12px;gap:8px;justify-content:stretch}
@@ -1885,7 +1979,7 @@ body.rtl .ys-amt{text-align:left}
           </div>
         </div>
 
-        <!-- Foto Upload -->
+        <!-- Foto Upload (Multi) -->
         <div class="photo-upload-section">
           <div class="form-group">
             <label for="f_photo">Foto (optional)</label>
@@ -1895,9 +1989,8 @@ body.rtl .ys-amt{text-align:left}
                 <span class="photo-capture-icon">📷</span>
                 <span id="photoBtnLabel">Foto aufnehmen</span>
               </button>
-              <img id="photoPreview" class="photo-preview-img" style="display:none" alt="Vorschau">
-              <button type="button" id="photoRemoveBtn" class="btn-photo-remove" style="display:none" onclick="removePhotoPreview()">✕</button>
             </div>
+            <div id="photoPreviewGrid" class="photo-preview-grid" style="display:none"></div>
           </div>
         </div>
 
@@ -1970,10 +2063,13 @@ body.rtl .ys-amt{text-align:left}
   </div>
 </div>
 
-<!-- Lightbox -->
+<!-- Lightbox (Multi) -->
 <div class="lightbox-overlay" id="lightboxOverlay" onclick="closeLightbox()">
   <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <button class="lightbox-nav lightbox-prev" id="lightboxPrev" onclick="lightboxPrev(event)">‹</button>
   <img id="lightboxImg" class="lightbox-img" alt="Foto" onclick="event.stopPropagation()">
+  <button class="lightbox-nav lightbox-next" id="lightboxNext" onclick="lightboxNext(event)">›</button>
+  <div class="lightbox-counter" id="lightboxCounter">1 / 1</div>
 </div>
 
 <div class="toast" id="toast"></div>
