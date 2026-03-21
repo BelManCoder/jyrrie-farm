@@ -47,7 +47,7 @@ const T = {
     allTypes:"Alle Einträge", typeWork:"🌾 Arbeitstage", typeExpense:"🛒 Ausgaben",
     cols:["Mitarbeiter","Datum","Typ","Details","Bemerkungen","Foto","Letzte Änderung","Aktionen"],
     noEntries:"Noch keine Einträge vorhanden.",
-    labelPhoto:"Foto (optional)", photoBtn:"📷 Foto aufnehmen", photoChange:"📷 Ändern", photoRemove:"✕ Entfernen",
+    labelPhoto:"Foto (optional)", photoBtn:"📷 Foto aufnehmen", photoGallery:"🖼 Aus Galerie", photoChange:"📷 Ändern", photoRemove:"✕ Entfernen",
     photoUploading:"Foto wird hochgeladen...", photoNoPhoto:"—",
     exportLabel:"Exportieren:", btnCSV:"📄 CSV", btnPrint:"🖨 Drucken / PDF",
     labelName:"Name des Mitarbeiters *", labelDate:"Datum *",
@@ -90,7 +90,7 @@ const T = {
     allTypes:"Toutes les entrées", typeWork:"🌾 Jours travaillés", typeExpense:"🛒 Dépenses",
     cols:["Employé","Date","Type","Détails","Remarques","Photo","Dernière modif.","Actions"],
     noEntries:"Aucune entrée pour le moment.",
-    labelPhoto:"Photo (optionnel)", photoBtn:"📷 Prendre une photo", photoChange:"📷 Changer", photoRemove:"✕ Supprimer",
+    labelPhoto:"Photo (optionnel)", photoBtn:"📷 Prendre une photo", photoGallery:"🖼 Depuis galerie", photoChange:"📷 Changer", photoRemove:"✕ Supprimer",
     photoUploading:"Téléchargement en cours...", photoNoPhoto:"—",
     exportLabel:"Exporter:", btnCSV:"📄 CSV", btnPrint:"🖨 Imprimer / PDF",
     labelName:"Nom de l'employé *", labelDate:"Date *",
@@ -133,7 +133,7 @@ const T = {
     allTypes:"كل الإدخالات", typeWork:"🌾 أيام العمل", typeExpense:"🛒 المصاريف",
     cols:["الموظف","التاريخ","النوع","التفاصيل","ملاحظات","صورة","آخر تعديل","إجراءات"],
     noEntries:"لا توجد إدخالات بعد.",
-    labelPhoto:"صورة (اختياري)", photoBtn:"📷 التقاط صورة", photoChange:"📷 تغيير", photoRemove:"✕ حذف",
+    labelPhoto:"صورة (اختياري)", photoBtn:"📷 التقاط صورة", photoGallery:"🖼 من المعرض", photoChange:"📷 تغيير", photoRemove:"✕ حذف",
     photoUploading:"جاري رفع الصورة...", photoNoPhoto:"—",
     exportLabel:"تصدير:", btnCSV:"📄 CSV", btnPrint:"🖨 طباعة / PDF",
     labelName:"اسم الموظف *", labelDate:"التاريخ *",
@@ -237,8 +237,9 @@ function updateAllText() {
   s("btnAddRate", t.addBtn);
   s("entryTypeLabel", t.entryType);
   s("btnTypeWork", t.btnWork);   s("btnTypeExpense", t.btnExpense);
-  lbl("f_photo", t.labelPhoto);
+  lbl("f_photo_camera", t.labelPhoto);
   s("photoBtnLabel", t.photoBtn);
+  s("photoGalleryLabel", t.photoGallery);
 
   const saveBtn = document.querySelector("[data-save]");
   if (saveBtn) saveBtn.textContent = editingId ? t.update : t.save;
@@ -604,8 +605,10 @@ window.clearForm = function() {
   pendingPhotoFiles = [];
   existingPhotos    = [];
   photosToDelete    = [];
-  const photoInput = document.getElementById("f_photo");
-  if (photoInput) photoInput.value = "";
+  const camInput = document.getElementById("f_photo_camera");
+  const galInput = document.getElementById("f_photo_gallery");
+  if (camInput) camInput.value = "";
+  if (galInput) galInput.value = "";
   const previewGrid = document.getElementById("photoPreviewGrid");
   if (previewGrid) { previewGrid.innerHTML = ""; previewGrid.style.display = "none"; }
 
@@ -1472,6 +1475,9 @@ td{padding:10px 14px;font-size:14px;vertical-align:middle}
 .photo-upload-area{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .btn-photo-capture{display:flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;border:2px dashed var(--border);background:var(--green-mist);color:var(--green-deep);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .2s}
 .btn-photo-capture:hover{border-color:var(--green-light);background:#e0f0e6}
+.btn-photo-gallery{display:flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;border:2px dashed var(--border);background:#f0f0ff;color:#4a4aaa;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .2s}
+.btn-photo-gallery:hover{border-color:#8888cc;background:#e4e4f4}
+.photo-buttons-row{display:flex;gap:10px;flex-wrap:wrap}
 .photo-capture-icon{font-size:20px}
 
 /* ── PHOTO PREVIEW GRID ──────────────────────────── */
@@ -1744,7 +1750,8 @@ body.rtl .ys-amt{text-align:left}
 
   /* Photo upload mobile */
   .photo-upload-area{flex-direction:row;align-items:center}
-  .btn-photo-capture{width:100%;justify-content:center;padding:14px;font-size:15px;border-radius:12px}
+  .photo-buttons-row{flex-direction:column;width:100%}
+  .btn-photo-capture,.btn-photo-gallery{width:100%;justify-content:center;padding:14px;font-size:15px;border-radius:12px}
   .photo-preview-grid{gap:8px;padding:10px}
   .photo-preview-item .photo-preview-img{width:60px;height:60px}
   .lightbox-close{top:12px;right:12px;width:40px;height:40px;font-size:22px}
@@ -1982,13 +1989,20 @@ body.rtl .ys-amt{text-align:left}
         <!-- Foto Upload (Multi) -->
         <div class="photo-upload-section">
           <div class="form-group">
-            <label for="f_photo">Foto (optional)</label>
+            <label for="f_photo_camera">Foto (optional)</label>
             <div class="photo-upload-area">
-              <input type="file" id="f_photo" accept="image/*" capture="environment" onchange="onPhotoSelected(this)" style="display:none">
-              <button type="button" class="btn-photo-capture" onclick="document.getElementById('f_photo').click()">
-                <span class="photo-capture-icon">📷</span>
-                <span id="photoBtnLabel">Foto aufnehmen</span>
-              </button>
+              <input type="file" id="f_photo_camera" accept="image/*" capture="environment" onchange="onPhotoSelected(this)" style="display:none">
+              <input type="file" id="f_photo_gallery" accept="image/*" multiple onchange="onPhotoSelected(this)" style="display:none">
+              <div class="photo-buttons-row">
+                <button type="button" class="btn-photo-capture" onclick="document.getElementById('f_photo_camera').click()">
+                  <span class="photo-capture-icon">📷</span>
+                  <span id="photoBtnLabel">Foto aufnehmen</span>
+                </button>
+                <button type="button" class="btn-photo-gallery" onclick="document.getElementById('f_photo_gallery').click()">
+                  <span class="photo-capture-icon">🖼</span>
+                  <span id="photoGalleryLabel">Aus Galerie</span>
+                </button>
+              </div>
             </div>
             <div id="photoPreviewGrid" class="photo-preview-grid" style="display:none"></div>
           </div>
