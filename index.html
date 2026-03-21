@@ -48,6 +48,7 @@ const T = {
     cols:["Mitarbeiter","Datum","Typ","Details","Bemerkungen","Foto","Letzte Änderung","Aktionen"],
     noEntries:"Noch keine Einträge vorhanden.",
     labelPhoto:"Foto (optional)", photoBtn:"📷 Foto aufnehmen", photoGallery:"🖼 Aus Galerie", photoChange:"📷 Ändern", photoRemove:"✕ Entfernen",
+    photoHint:"Kamera: einzelnes Foto · Galerie: mehrere auswählen",
     photoUploading:"Foto wird hochgeladen...", photoNoPhoto:"—",
     exportLabel:"Exportieren:", btnCSV:"📄 CSV", btnPrint:"🖨 Drucken / PDF",
     labelName:"Name des Mitarbeiters *", labelDate:"Datum *",
@@ -91,6 +92,7 @@ const T = {
     cols:["Employé","Date","Type","Détails","Remarques","Photo","Dernière modif.","Actions"],
     noEntries:"Aucune entrée pour le moment.",
     labelPhoto:"Photo (optionnel)", photoBtn:"📷 Prendre une photo", photoGallery:"🖼 Depuis galerie", photoChange:"📷 Changer", photoRemove:"✕ Supprimer",
+    photoHint:"Caméra: une photo · Galerie: plusieurs",
     photoUploading:"Téléchargement en cours...", photoNoPhoto:"—",
     exportLabel:"Exporter:", btnCSV:"📄 CSV", btnPrint:"🖨 Imprimer / PDF",
     labelName:"Nom de l'employé *", labelDate:"Date *",
@@ -134,6 +136,7 @@ const T = {
     cols:["الموظف","التاريخ","النوع","التفاصيل","ملاحظات","صورة","آخر تعديل","إجراءات"],
     noEntries:"لا توجد إدخالات بعد.",
     labelPhoto:"صورة (اختياري)", photoBtn:"📷 التقاط صورة", photoGallery:"🖼 من المعرض", photoChange:"📷 تغيير", photoRemove:"✕ حذف",
+    photoHint:"الكاميرا: صورة واحدة · المعرض: عدة صور",
     photoUploading:"جاري رفع الصورة...", photoNoPhoto:"—",
     exportLabel:"تصدير:", btnCSV:"📄 CSV", btnPrint:"🖨 طباعة / PDF",
     labelName:"اسم الموظف *", labelDate:"التاريخ *",
@@ -240,6 +243,7 @@ function updateAllText() {
   lbl("f_photo_camera", t.labelPhoto);
   s("photoBtnLabel", t.photoBtn);
   s("photoGalleryLabel", t.photoGallery);
+  s("photoHint", t.photoHint);
 
   const saveBtn = document.querySelector("[data-save]");
   if (saveBtn) saveBtn.textContent = editingId ? t.update : t.save;
@@ -355,51 +359,123 @@ function getEntryPhotos(e) {
   return [];
 }
 
+// iOS-safe: recreate input element each time to avoid stale state
+window.triggerCamera = function() {
+  var inp = document.getElementById("f_photo_camera");
+  // Clone and replace to reset completely (iOS fix)
+  var fresh = inp.cloneNode(true);
+  inp.parentNode.replaceChild(fresh, inp);
+  setTimeout(function() { fresh.click(); }, 50);
+};
+window.triggerGallery = function() {
+  var inp = document.getElementById("f_photo_gallery");
+  var fresh = inp.cloneNode(true);
+  inp.parentNode.replaceChild(fresh, inp);
+  setTimeout(function() { fresh.click(); }, 50);
+};
+
 window.onPhotoSelected = function(input) {
   const files = input.files;
   if (!files || !files.length) return;
   for (let i = 0; i < files.length; i++) {
     pendingPhotoFiles.push(files[i]);
   }
-  input.value = "";
+  // iOS fix: defer value reset to avoid blob invalidation
+  setTimeout(function() { try { input.value = ""; } catch(e) {} }, 100);
   renderPhotoPreview();
+  // Update photo count badge
+  updatePhotoCount();
 };
 
 window.removeNewPhoto = function(idx) {
   pendingPhotoFiles.splice(idx, 1);
+  pendingPhotoDataUrls.splice(idx, 1);
   renderPhotoPreview();
+  updatePhotoCount();
 };
 
 window.removeExistingPhoto = function(idx) {
   const removed = existingPhotos.splice(idx, 1)[0];
   if (removed && removed.path) photosToDelete.push(removed.path);
   renderPhotoPreview();
+  updatePhotoCount();
 };
+
+// Cache data URLs for iOS compatibility (blob URLs can expire)
+let pendingPhotoDataUrls = [];
+
+function generateDataUrl(file, callback) {
+  var reader = new FileReader();
+  reader.onload = function(e) { callback(e.target.result); };
+  reader.readAsDataURL(file);
+}
+
+function updatePhotoCount() {
+  var total = existingPhotos.length + pendingPhotoFiles.length;
+  var badge = document.getElementById("photoCountBadge");
+  if (badge) {
+    badge.textContent = total > 0 ? total + " 📷" : "";
+    badge.style.display = total > 0 ? "inline-block" : "none";
+  }
+}
 
 function renderPhotoPreview() {
   const container = document.getElementById("photoPreviewGrid");
   if (!container) return;
-  let html = "";
 
-  // Existing photos (already uploaded)
+  var total = existingPhotos.length + pendingPhotoFiles.length;
+  if (!total) {
+    container.innerHTML = "";
+    container.style.display = "none";
+    return;
+  }
+
+  // Build existing photos HTML
+  var html = "";
   existingPhotos.forEach(function(p, i) {
     html += '<div class="photo-preview-item">'
-      + '<img src="' + p.url + '" alt="Foto" class="photo-preview-img">'
+      + '<img src="' + p.url + '" alt="Foto" class="photo-preview-img" loading="lazy">'
       + '<button type="button" class="btn-photo-item-remove" onclick="removeExistingPhoto(' + i + ')">✕</button>'
       + '</div>';
   });
 
-  // New pending files (not yet uploaded)
+  // For new files: use cached data URLs or generate them
+  var needsGeneration = false;
   pendingPhotoFiles.forEach(function(file, i) {
-    const dataUrl = URL.createObjectURL(file);
-    html += '<div class="photo-preview-item">'
-      + '<img src="' + dataUrl + '" alt="Neu" class="photo-preview-img photo-preview-new">'
-      + '<button type="button" class="btn-photo-item-remove" onclick="removeNewPhoto(' + i + ')">✕</button>'
-      + '</div>';
+    if (pendingPhotoDataUrls[i]) {
+      html += '<div class="photo-preview-item">'
+        + '<img src="' + pendingPhotoDataUrls[i] + '" alt="Neu" class="photo-preview-img photo-preview-new" loading="lazy">'
+        + '<button type="button" class="btn-photo-item-remove" onclick="removeNewPhoto(' + i + ')">✕</button>'
+        + '</div>';
+    } else {
+      needsGeneration = true;
+      html += '<div class="photo-preview-item photo-preview-loading" id="ppItem' + i + '">'
+        + '<div class="photo-preview-img photo-preview-new" style="display:flex;align-items:center;justify-content:center;background:var(--sand);font-size:18px">⏳</div>'
+        + '<button type="button" class="btn-photo-item-remove" onclick="removeNewPhoto(' + i + ')">✕</button>'
+        + '</div>';
+    }
   });
 
   container.innerHTML = html;
-  container.style.display = (existingPhotos.length || pendingPhotoFiles.length) ? "flex" : "none";
+  container.style.display = "flex";
+
+  // Generate missing data URLs (async, iOS safe)
+  if (needsGeneration) {
+    pendingPhotoFiles.forEach(function(file, i) {
+      if (!pendingPhotoDataUrls[i]) {
+        generateDataUrl(file, function(dataUrl) {
+          pendingPhotoDataUrls[i] = dataUrl;
+          var placeholder = document.getElementById("ppItem" + i);
+          if (placeholder) {
+            placeholder.innerHTML = '<img src="' + dataUrl + '" alt="Neu" class="photo-preview-img photo-preview-new" loading="lazy">'
+              + '<button type="button" class="btn-photo-item-remove" onclick="removeNewPhoto(' + i + ')">✕</button>';
+            placeholder.classList.remove("photo-preview-loading");
+            placeholder.removeAttribute("id");
+          }
+        });
+      }
+    });
+  }
 }
 
 // ── LIGHTBOX (MULTI) ─────────────────────────────────────────
@@ -602,9 +678,10 @@ window.clearForm = function() {
   const fd = document.getElementById("f_day");
   if (fd) fd.value = "1";
   // Reset photos
-  pendingPhotoFiles = [];
-  existingPhotos    = [];
-  photosToDelete    = [];
+  pendingPhotoFiles    = [];
+  pendingPhotoDataUrls = [];
+  existingPhotos       = [];
+  photosToDelete       = [];
   const camInput = document.getElementById("f_photo_camera");
   const galInput = document.getElementById("f_photo_gallery");
   if (camInput) camInput.value = "";
@@ -640,10 +717,12 @@ window.editEntry = function(id) {
     document.getElementById("f_notes_expense").value = e.notes || "";
   }
   // Show existing photos
-  pendingPhotoFiles = [];
-  photosToDelete    = [];
-  existingPhotos    = getEntryPhotos(e).slice();
+  pendingPhotoFiles    = [];
+  pendingPhotoDataUrls = [];
+  photosToDelete       = [];
+  existingPhotos       = getEntryPhotos(e).slice();
   renderPhotoPreview();
+  updatePhotoCount();
   const btn = document.querySelector("[data-save]");
   if (btn) btn.textContent = t.update;
   window.showTabMobile("new");
@@ -1479,6 +1558,8 @@ td{padding:10px 14px;font-size:14px;vertical-align:middle}
 .btn-photo-gallery:hover{border-color:#8888cc;background:#e4e4f4}
 .photo-buttons-row{display:flex;gap:10px;flex-wrap:wrap}
 .photo-capture-icon{font-size:20px}
+.photo-count-badge{background:var(--green-mid);color:#fff;font-size:12px;font-weight:600;padding:2px 8px;border-radius:12px;margin-inline-start:4px}
+.photo-hint-text{font-size:11px;color:var(--text-muted);margin-top:8px;font-style:italic}
 
 /* ── PHOTO PREVIEW GRID ──────────────────────────── */
 .photo-preview-grid{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;padding:12px;background:var(--sand);border-radius:10px;border:1px solid var(--border)}
@@ -1738,10 +1819,11 @@ body.rtl .ys-amt{text-align:left}
     font-size:13px;
     line-height:1.5;
   }
-  td.td-photo{justify-content:flex-end;padding:10px 14px}
-  td.td-photo .photo-thumbs{justify-content:flex-end}
-  td.td-photo .photo-thumb{width:48px;height:48px;border-radius:8px}
-  td.td-photo .photo-more{width:48px;height:48px;font-size:13px}
+  td.td-photo{justify-content:flex-end;padding:12px 14px}
+  td.td-photo .photo-thumbs{justify-content:flex-end;gap:6px}
+  td.td-photo .photo-thumb{width:56px;height:56px;border-radius:10px;border-width:2px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+  td.td-photo .photo-more{width:56px;height:56px;font-size:14px;border-radius:10px}
+  td.td-photo .photo-none{font-size:14px}
   td.td-ts{font-size:11px}
   td.td-act{border-bottom:none;justify-content:flex-end;padding:8px 12px;background:var(--sand);border-radius:0 0 10px 10px}
   td.td-act::before{display:none}
@@ -1991,18 +2073,20 @@ body.rtl .ys-amt{text-align:left}
           <div class="form-group">
             <label for="f_photo_camera">Foto (optional)</label>
             <div class="photo-upload-area">
-              <input type="file" id="f_photo_camera" accept="image/*" capture="environment" onchange="onPhotoSelected(this)" style="display:none">
-              <input type="file" id="f_photo_gallery" accept="image/*" multiple onchange="onPhotoSelected(this)" style="display:none">
+              <input type="file" id="f_photo_camera" accept="image/*" capture="environment" onchange="onPhotoSelected(this)" style="display:none;position:absolute;left:-9999px">
+              <input type="file" id="f_photo_gallery" accept="image/*" multiple onchange="onPhotoSelected(this)" style="display:none;position:absolute;left:-9999px">
               <div class="photo-buttons-row">
-                <button type="button" class="btn-photo-capture" onclick="document.getElementById('f_photo_camera').click()">
+                <button type="button" class="btn-photo-capture" onclick="triggerCamera()">
                   <span class="photo-capture-icon">📷</span>
                   <span id="photoBtnLabel">Foto aufnehmen</span>
+                  <span id="photoCountBadge" class="photo-count-badge" style="display:none"></span>
                 </button>
-                <button type="button" class="btn-photo-gallery" onclick="document.getElementById('f_photo_gallery').click()">
+                <button type="button" class="btn-photo-gallery" onclick="triggerGallery()">
                   <span class="photo-capture-icon">🖼</span>
                   <span id="photoGalleryLabel">Aus Galerie</span>
                 </button>
               </div>
+              <p class="photo-hint-text" id="photoHint"></p>
             </div>
             <div id="photoPreviewGrid" class="photo-preview-grid" style="display:none"></div>
           </div>
