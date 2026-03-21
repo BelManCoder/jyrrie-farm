@@ -45,11 +45,11 @@ const T = {
     tabs:["📋 Einträge","+ Neuer Eintrag","📊 Monatsübersicht"],
     filterName:"🔍 Name filtern...", allMonths:"Alle Monate",
     allTypes:"Alle Einträge", typeWork:"🌾 Arbeitstage", typeExpense:"🛒 Ausgaben",
-    cols:["Mitarbeiter","Datum","Typ","Details","Bemerkungen","Foto","Letzte Änderung","Aktionen"],
+    cols:["Mitarbeiter","Datum","Typ","Details","Bemerkungen","Bilder","Letzte Änderung","Aktionen"],
     noEntries:"Noch keine Einträge vorhanden.",
-    labelPhoto:"Foto (optional)", photoBtn:"📷 Foto aufnehmen", photoGallery:"🖼 Aus Galerie", photoChange:"📷 Ändern", photoRemove:"✕ Entfernen",
-    photoHint:"Kamera: einzelnes Foto · Galerie: mehrere auswählen",
-    photoUploading:"Foto wird hochgeladen...", photoNoPhoto:"—",
+    labelPhoto:"Bilder (optional)", photoBtn:"📷 Bild aufnehmen", photoGallery:"🖼 Aus Galerie", photoChange:"📷 Ändern", photoRemove:"✕ Entfernen",
+    photoHint:"Kamera: einzelnes Bild · Galerie: mehrere auswählen",
+    photoUploading:"Bilder werden hochgeladen...", photoNoPhoto:"Keine Bilder",
     exportLabel:"Exportieren:", btnCSV:"📄 CSV", btnPrint:"🖨 Drucken / PDF",
     labelName:"Name des Mitarbeiters *", labelDate:"Datum *",
     entryType:"Art des Eintrags *", btnWork:"🌾 Arbeitstag", btnExpense:"🛒 Ausgaben / Einkäufe",
@@ -89,11 +89,11 @@ const T = {
     tabs:["📋 Entrées","+ Nouvelle entrée","📊 Aperçu mensuel"],
     filterName:"🔍 Filtrer par nom...", allMonths:"Tous les mois",
     allTypes:"Toutes les entrées", typeWork:"🌾 Jours travaillés", typeExpense:"🛒 Dépenses",
-    cols:["Employé","Date","Type","Détails","Remarques","Photo","Dernière modif.","Actions"],
+    cols:["Employé","Date","Type","Détails","Remarques","Images","Dernière modif.","Actions"],
     noEntries:"Aucune entrée pour le moment.",
-    labelPhoto:"Photo (optionnel)", photoBtn:"📷 Prendre une photo", photoGallery:"🖼 Depuis galerie", photoChange:"📷 Changer", photoRemove:"✕ Supprimer",
+    labelPhoto:"Images (optionnel)", photoBtn:"📷 Prendre une photo", photoGallery:"🖼 Depuis galerie", photoChange:"📷 Changer", photoRemove:"✕ Supprimer",
     photoHint:"Caméra: une photo · Galerie: plusieurs",
-    photoUploading:"Téléchargement en cours...", photoNoPhoto:"—",
+    photoUploading:"Téléchargement en cours...", photoNoPhoto:"Aucune image",
     exportLabel:"Exporter:", btnCSV:"📄 CSV", btnPrint:"🖨 Imprimer / PDF",
     labelName:"Nom de l'employé *", labelDate:"Date *",
     entryType:"Type d'entrée *", btnWork:"🌾 Jour travaillé", btnExpense:"🛒 Dépenses / Achats",
@@ -133,11 +133,11 @@ const T = {
     tabs:["📋 الإدخالات","+ إدخال جديد","📊 ملخص شهري"],
     filterName:"🔍 بحث بالاسم...", allMonths:"كل الأشهر",
     allTypes:"كل الإدخالات", typeWork:"🌾 أيام العمل", typeExpense:"🛒 المصاريف",
-    cols:["الموظف","التاريخ","النوع","التفاصيل","ملاحظات","صورة","آخر تعديل","إجراءات"],
+    cols:["الموظف","التاريخ","النوع","التفاصيل","ملاحظات","صور","آخر تعديل","إجراءات"],
     noEntries:"لا توجد إدخالات بعد.",
-    labelPhoto:"صورة (اختياري)", photoBtn:"📷 التقاط صورة", photoGallery:"🖼 من المعرض", photoChange:"📷 تغيير", photoRemove:"✕ حذف",
+    labelPhoto:"صور (اختياري)", photoBtn:"📷 التقاط صورة", photoGallery:"🖼 من المعرض", photoChange:"📷 تغيير", photoRemove:"✕ حذف",
     photoHint:"الكاميرا: صورة واحدة · المعرض: عدة صور",
-    photoUploading:"جاري رفع الصورة...", photoNoPhoto:"—",
+    photoUploading:"جاري رفع الصور...", photoNoPhoto:"لا توجد صور",
     exportLabel:"تصدير:", btnCSV:"📄 CSV", btnPrint:"🖨 طباعة / PDF",
     labelName:"اسم الموظف *", labelDate:"التاريخ *",
     entryType:"نوع الإدخال *", btnWork:"🌾 عمل", btnExpense:"🛒 مصاريف / مشتريات",
@@ -839,7 +839,7 @@ function renderTable() {
   const colType   = t.cols[2] || "Typ";
   const colDetail = t.cols[3] || "Details";
   const colNotes  = t.cols[4] || "Bemerkungen";
-  const colPhoto  = t.cols[5] || "Foto";
+  const colPhoto  = t.cols[5] || "Bilder";
   const colChg    = t.cols[6] || "Letzte Änderung";
 
   tbody.innerHTML = filtered.map(function(e, idx) {
@@ -881,7 +881,7 @@ function renderTable() {
       photoCell = '<div class="photo-thumbs">';
       photos.forEach(function(p, pi) {
         if (pi < 3) {
-          photoCell += '<img src="' + p.url + '" class="photo-thumb" onclick="openLightbox(' + photosJson + ',' + pi + ')" alt="Foto" loading="lazy">';
+          photoCell += '<img src="' + p.url + '" class="photo-thumb" onclick="openLightbox(' + photosJson + ',' + pi + ')" alt="Bild" loading="lazy">';
         }
       });
       if (photos.length > 3) {
@@ -1541,12 +1541,12 @@ td{padding:10px 14px;font-size:14px;vertical-align:middle}
 .btn-edit:hover{background:var(--green-mist)}
 
 /* ── PHOTO THUMBNAILS (MULTI) ─────────────────────── */
-.photo-thumbs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:center}
-.photo-thumb{width:40px;height:40px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid var(--border);transition:transform .18s,box-shadow .18s}
-.photo-thumb:hover{transform:scale(1.1);box-shadow:0 2px 10px rgba(0,0,0,.2);z-index:1}
-.photo-more{width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:var(--green-mist);border:2px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;color:var(--green-deep);cursor:pointer}
+.photo-thumbs{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center}
+.photo-thumb{width:44px;height:44px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--border);transition:transform .18s,box-shadow .18s}
+.photo-thumb:hover{transform:scale(1.12);box-shadow:0 3px 12px rgba(0,0,0,.2);z-index:1}
+.photo-more{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:var(--green-mist);border:2px dashed var(--border);border-radius:8px;font-size:13px;font-weight:600;color:var(--green-deep);cursor:pointer;transition:all .18s}
 .photo-more:hover{background:var(--green-light);color:#fff}
-.photo-none{font-size:13px;color:var(--text-muted)}
+.photo-none{font-size:13px;color:var(--text-muted);font-style:italic}
 .td-photo{text-align:center;vertical-align:middle}
 
 /* ── PHOTO UPLOAD AREA ───────────────────────────── */
@@ -1819,11 +1819,50 @@ body.rtl .ys-amt{text-align:left}
     font-size:13px;
     line-height:1.5;
   }
-  td.td-photo{justify-content:flex-end;padding:12px 14px}
-  td.td-photo .photo-thumbs{justify-content:flex-end;gap:6px}
-  td.td-photo .photo-thumb{width:56px;height:56px;border-radius:10px;border-width:2px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
-  td.td-photo .photo-more{width:56px;height:56px;font-size:14px;border-radius:10px}
-  td.td-photo .photo-none{font-size:14px}
+  td.td-photo{
+    flex-direction:column;
+    align-items:stretch;
+    padding:10px 14px;
+    gap:8px;
+    background:var(--green-mist);
+    border-bottom:1px solid var(--border);
+  }
+  td.td-photo::before{
+    margin-bottom:2px;
+    font-size:12px;
+    font-weight:600;
+    color:var(--green-deep);
+    text-transform:none;
+    letter-spacing:0;
+  }
+  td.td-photo .photo-thumbs{
+    justify-content:flex-start;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  td.td-photo .photo-thumb{
+    width:64px;
+    height:64px;
+    border-radius:10px;
+    border:2px solid var(--green-light);
+    box-shadow:0 2px 10px rgba(0,0,0,.15);
+    -webkit-tap-highlight-color:transparent;
+  }
+  td.td-photo .photo-thumb:active{transform:scale(0.95)}
+  td.td-photo .photo-more{
+    width:64px;
+    height:64px;
+    font-size:15px;
+    border-radius:10px;
+    border:2px dashed var(--green-light);
+    background:rgba(45,90,61,.08);
+  }
+  td.td-photo .photo-none{
+    font-size:13px;
+    color:var(--text-muted);
+    font-style:italic;
+    padding:4px 0;
+  }
   td.td-ts{font-size:11px}
   td.td-act{border-bottom:none;justify-content:flex-end;padding:8px 12px;background:var(--sand);border-radius:0 0 10px 10px}
   td.td-act::before{display:none}
@@ -2071,14 +2110,14 @@ body.rtl .ys-amt{text-align:left}
         <!-- Foto Upload (Multi) -->
         <div class="photo-upload-section">
           <div class="form-group">
-            <label for="f_photo_camera">Foto (optional)</label>
+            <label for="f_photo_camera">Bilder (optional)</label>
             <div class="photo-upload-area">
               <input type="file" id="f_photo_camera" accept="image/*" capture="environment" onchange="onPhotoSelected(this)" style="display:none;position:absolute;left:-9999px">
               <input type="file" id="f_photo_gallery" accept="image/*" multiple onchange="onPhotoSelected(this)" style="display:none;position:absolute;left:-9999px">
               <div class="photo-buttons-row">
                 <button type="button" class="btn-photo-capture" onclick="triggerCamera()">
                   <span class="photo-capture-icon">📷</span>
-                  <span id="photoBtnLabel">Foto aufnehmen</span>
+                  <span id="photoBtnLabel">Bild aufnehmen</span>
                   <span id="photoCountBadge" class="photo-count-badge" style="display:none"></span>
                 </button>
                 <button type="button" class="btn-photo-gallery" onclick="triggerGallery()">
@@ -2119,7 +2158,7 @@ body.rtl .ys-amt{text-align:left}
               <th>Typ</th>
               <th>Details</th>
               <th>Bemerkungen</th>
-              <th>Foto</th>
+              <th>Bilder</th>
               <th>Letzte Änderung</th>
               <th id="thAktionen">Aktionen</th>
             </tr>
