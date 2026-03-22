@@ -1185,6 +1185,7 @@ window.renderMonthly = function() {
 
 // ── YEARLY SUMMARY ───────────────────────────────────────────
 function renderYearlySummary(months) {
+  const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
   const years = {};
 
   Object.keys(months).forEach(function(m) {
@@ -1195,14 +1196,26 @@ function renderYearlySummary(months) {
     const totalExp  = data.expensesList.reduce(function(s, e) { return s + e.amount; }, 0);
     const grand     = totalWage + totalExp;
 
-    if (!years[yr]) years[yr] = { paid: 0, unpaid: 0, paidMonths: 0, unpaidMonths: 0 };
+    // Format month label
+    const parts = m.split("-");
+    const monthLabel = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1)
+      .toLocaleDateString(locale, { month:"long", year:"numeric" });
+
+    if (!years[yr]) years[yr] = { paidList: [], unpaidList: [], paidTotal: 0, unpaidTotal: 0 };
+    const entry = { key: m, label: monthLabel, amount: grand, paidDate: pmt.paidDate || null };
     if (pmt.paid) {
-      years[yr].paid       += grand;
-      years[yr].paidMonths += 1;
+      years[yr].paidList.push(entry);
+      years[yr].paidTotal += grand;
     } else {
-      years[yr].unpaid       += grand;
-      years[yr].unpaidMonths += 1;
+      years[yr].unpaidList.push(entry);
+      years[yr].unpaidTotal += grand;
     }
+  });
+
+  // Sort month lists chronologically (newest first)
+  Object.values(years).forEach(function(y) {
+    y.paidList.sort(function(a, b) { return b.key.localeCompare(a.key); });
+    y.unpaidList.sort(function(a, b) { return b.key.localeCompare(a.key); });
   });
 
   const container = document.getElementById("yearlySummary");
@@ -1214,33 +1227,63 @@ function renderYearlySummary(months) {
     + '<div class="ys-title">📅 ' + t.yTitle + '</div>'
     + sortedYears.map(function(yr) {
         const y = years[yr];
-        const hasPaid   = y.paid > 0;
-        const hasUnpaid = y.unpaid > 0;
+        const hasPaid   = y.paidList.length > 0;
+        const hasUnpaid = y.unpaidList.length > 0;
+        const grandTotal = y.paidTotal + y.unpaidTotal;
+
+        // Paid section with month breakdown
+        var paidSection = '';
+        if (hasPaid) {
+          paidSection = '<div class="ys-section ys-section-paid">'
+            + '<div class="ys-section-header">'
+            + '<span class="ys-dot dot-paid"></span>'
+            + '<span class="ys-section-lbl">' + t.yPaidTotal + '</span>'
+            + '<span class="ys-section-total ys-paid-amt" dir="ltr">' + fmtAmt(y.paidTotal) + '</span>'
+            + '</div>'
+            + y.paidList.map(function(m) {
+                return '<div class="ys-month-row">'
+                  + '<span class="ys-month-name">' + m.label
+                  + (m.paidDate ? ' <span class="ys-paid-date">· ' + t.mPaidOn + ' ' + m.paidDate + '</span>' : '')
+                  + '</span>'
+                  + '<span class="ys-month-amt" dir="ltr">' + fmtAmt(m.amount) + '</span>'
+                  + '</div>';
+              }).join('')
+            + '</div>';
+        }
+
+        // Unpaid section with month breakdown
+        var unpaidSection = '';
+        if (hasUnpaid) {
+          unpaidSection = '<div class="ys-section ys-section-unpaid">'
+            + '<div class="ys-section-header">'
+            + '<span class="ys-dot dot-unpaid"></span>'
+            + '<span class="ys-section-lbl">' + t.yUnpaidTotal + '</span>'
+            + '<span class="ys-section-total ys-unpaid-amt" dir="ltr">' + fmtAmt(y.unpaidTotal) + '</span>'
+            + '</div>'
+            + y.unpaidList.map(function(m) {
+                return '<div class="ys-month-row">'
+                  + '<span class="ys-month-name">' + m.label + '</span>'
+                  + '<span class="ys-month-amt ys-unpaid-amt" dir="ltr">' + fmtAmt(m.amount) + '</span>'
+                  + '</div>';
+              }).join('')
+            + '</div>';
+        }
+
+        // Grand total row (only if both paid and unpaid exist)
+        var totalSection = '';
+        if (hasPaid && hasUnpaid) {
+          totalSection = '<div class="ys-grand-row">'
+            + '<span class="ys-grand-lbl">' + t.yTotal + '</span>'
+            + '<span class="ys-grand-amt" dir="ltr">' + fmtAmt(grandTotal) + '</span>'
+            + '</div>';
+        }
+
         return '<div class="ys-year-block">'
           + '<div class="ys-year-label">' + yr + '</div>'
           + '<div class="ys-year-divider"></div>'
-          + (hasPaid
-              ? '<div class="ys-row ys-paid-row">'
-                + '<span class="ys-dot dot-paid"></span>'
-                + '<span class="ys-lbl">' + t.yPaidTotal
-                + ' <span class="ys-months-count">(' + y.paidMonths + ' ' + t.yMonth + ')</span></span>'
-                + '<span class="ys-amt ys-paid-amt" dir="ltr">' + fmtAmt(y.paid) + '</span>'
-                + '</div>'
-              : '')
-          + (hasUnpaid
-              ? '<div class="ys-row ys-unpaid-row">'
-                + '<span class="ys-dot dot-unpaid"></span>'
-                + '<span class="ys-lbl">' + t.yUnpaidTotal
-                + ' <span class="ys-months-count">(' + y.unpaidMonths + ' ' + t.yMonth + ')</span></span>'
-                + '<span class="ys-amt ys-unpaid-amt" dir="ltr">' + fmtAmt(y.unpaid) + '</span>'
-                + '</div>'
-              : '')
-          + (hasPaid && hasUnpaid
-              ? '<div class="ys-row ys-combined">'
-                + '<span class="ys-combined-lbl" style="font-size:13px;color:var(--text-muted);font-weight:500">' + t.yTotal + '</span>'
-                + '<span class="ys-combined-amt" dir="ltr" style="font-size:15px;font-weight:700;color:var(--text-dark)">' + fmtAmt(y.paid + y.unpaid) + '</span>'
-                + '</div>'
-              : '')
+          + paidSection
+          + unpaidSection
+          + totalSection
           + '</div>';
       }).join("")
     + '</div>';
@@ -1780,6 +1823,7 @@ body.rtl .modal h2{font-family:'Noto Sans Arabic',sans-serif}
 .modal-error{color:var(--terracotta);font-size:13px;margin-top:-6px;margin-bottom:10px;display:none}
 
 /* ── YEARLY SUMMARY ───────────────────────────────── */
+/* ── YEARLY SUMMARY ───────────────────────────────── */
 .ys-wrapper{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden}
 .ys-title{background:var(--green-deep);color:#fff;font-family:'Playfair Display',serif;font-size:15px;font-weight:500;padding:13px 20px;letter-spacing:.3px}
 body.rtl .ys-title{font-family:'Noto Sans Arabic',sans-serif;letter-spacing:0}
@@ -1787,18 +1831,38 @@ body.rtl .ys-title{font-family:'Noto Sans Arabic',sans-serif;letter-spacing:0}
 .ys-year-block:last-child{border-bottom:none}
 .ys-year-label{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--green-deep);margin-bottom:8px}
 body.rtl .ys-year-label{font-family:'Noto Sans Arabic',sans-serif}
-.ys-year-divider{height:1px;background:var(--border);margin-bottom:10px}
-.ys-row{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:14px}
+.ys-year-divider{height:1px;background:var(--border);margin-bottom:12px}
 .ys-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-.ys-lbl{flex:1;color:var(--text-mid)}
-.ys-months-count{font-size:11px;color:var(--text-muted);font-weight:400}
-.ys-amt{font-weight:600;font-size:15px;min-width:100px;text-align:right}
-body.rtl .ys-amt{text-align:left}
 .ys-paid-amt{color:var(--green-mid)}
 .ys-unpaid-amt{color:var(--terracotta)}
-.ys-paid-row{background:rgba(34,197,94,.05);border-radius:8px;padding:7px 10px!important;margin-bottom:4px}
-.ys-unpaid-row{background:rgba(249,115,22,.05);border-radius:8px;padding:7px 10px!important;margin-bottom:4px}
-.ys-combined{justify-content:space-between;padding:8px 10px!important;border-top:1px dashed var(--border);background:var(--green-mist);border-radius:8px;margin-top:4px}
+
+/* Section (paid / unpaid group) */
+.ys-section{border-radius:10px;margin-bottom:10px;overflow:hidden}
+.ys-section-paid{background:rgba(34,197,94,.04);border:1px solid rgba(34,197,94,.15)}
+.ys-section-unpaid{background:rgba(249,115,22,.04);border:1px solid rgba(249,115,22,.15)}
+
+/* Section header (summary row) */
+.ys-section-header{display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:14px;font-weight:600}
+.ys-section-paid .ys-section-header{background:rgba(34,197,94,.08);border-bottom:1px solid rgba(34,197,94,.12)}
+.ys-section-unpaid .ys-section-header{background:rgba(249,115,22,.08);border-bottom:1px solid rgba(249,115,22,.12)}
+.ys-section-lbl{flex:1;color:var(--text-dark)}
+.ys-section-total{font-size:16px;font-weight:700;min-width:90px;text-align:right}
+body.rtl .ys-section-total{text-align:left}
+
+/* Month rows inside section */
+.ys-month-row{display:flex;align-items:center;justify-content:space-between;padding:7px 14px 7px 34px;font-size:13px;border-bottom:1px solid rgba(0,0,0,.04)}
+body.rtl .ys-month-row{padding:7px 34px 7px 14px}
+.ys-month-row:last-child{border-bottom:none}
+.ys-month-name{color:var(--text-mid);flex:1}
+.ys-paid-date{font-size:11px;color:var(--text-muted);font-weight:400}
+.ys-month-amt{font-weight:500;font-size:13px;min-width:80px;text-align:right;color:var(--text-dark)}
+body.rtl .ys-month-amt{text-align:left}
+
+/* Grand total row */
+.ys-grand-row{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--green-mist);border-radius:10px;margin-top:4px}
+.ys-grand-lbl{font-size:14px;font-weight:600;color:var(--text-dark)}
+.ys-grand-amt{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--green-deep)}
+body.rtl .ys-grand-amt{font-family:'Noto Sans Arabic',sans-serif}
 
 
 
@@ -2048,8 +2112,13 @@ body.rtl .ys-amt{text-align:left}
   .mc-pay-btn{padding:9px 14px;font-size:13px}
 
   /* Yearly */
-  .ys-year-block{padding:12px 16px}
-  .ys-row{font-size:14px}
+  .ys-year-block{padding:12px 14px}
+  .ys-section-header{padding:9px 12px;font-size:13px}
+  .ys-section-total{font-size:15px}
+  .ys-month-row{padding:6px 12px 6px 28px;font-size:12px}
+  body.rtl .ys-month-row{padding:6px 28px 6px 12px}
+  .ys-grand-row{padding:10px 12px}
+  .ys-grand-amt{font-size:16px}
 
   /* Modal: slide up from bottom */
   .modal-overlay{padding:0;align-items:flex-end}
