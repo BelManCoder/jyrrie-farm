@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1a3a2a">
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=DM+Sans:wght@300;400;500&family=Noto+Sans+Arabic:wght@300;400;500&display=swap" rel="stylesheet">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 const firebaseConfig = {
@@ -158,7 +158,7 @@ const T = {
     toastLoggedOut:"تم تسجيل الخروج.", fillFields:"⚠ يرجى ملء جميع الحقول الإلزامية.",
     fillAmount:"⚠ يرجى إدخال المبلغ.",
     confirmDelete:"هل تريد حذف هذا الإدخال؟", confirmRate:"هل تريد حذف هذا الأجر؟",
-    enterName:"اسم الموظف:", noData:"لا توجد بيانات بعد.", perDay:"", dayUnit:"يوم",
+    enterName:"اسم الموظف:", noData:"لا توجد بيانات بعد.", perDay:"/يوم", dayUnit:"يوم",
     accessPrompt:"🔒 أدخل رمز الوصول",
     accessBtn:"تأكيد الدخول →", accessError:"❌ رمز خاطئ. حاول مرة أخرى.",
     accessFooter:"للموظفين المصرح لهم فقط",
@@ -289,6 +289,10 @@ function updateAllText() {
 }
 
 // ── UTILITIES ────────────────────────────────────────────────
+function esc(s) {
+  if (!s) return s;
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
 function toast(msg) {
   const el = document.getElementById("toast");
   el.textContent = msg;
@@ -327,7 +331,9 @@ function compressImage(file, maxW, quality) {
   quality = quality || 0.7;
   return new Promise(function(resolve) {
     const img = new Image();
+    const objUrl = URL.createObjectURL(file);
     img.onload = function() {
+      URL.revokeObjectURL(objUrl);
       let w = img.width, h = img.height;
       if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
       const canvas = document.createElement("canvas");
@@ -335,7 +341,8 @@ function compressImage(file, maxW, quality) {
       canvas.getContext("2d").drawImage(img, 0, 0, w, h);
       canvas.toBlob(function(blob) { resolve(blob); }, "image/jpeg", quality);
     };
-    img.src = URL.createObjectURL(file);
+    img.onerror = function() { URL.revokeObjectURL(objUrl); resolve(file); };
+    img.src = objUrl;
   });
 }
 
@@ -522,6 +529,28 @@ document.addEventListener("keydown", function(ev) {
   if (ev.key === "ArrowLeft") { lightboxIndex = (lightboxIndex - 1 + lightboxPhotos.length) % lightboxPhotos.length; updateLightboxImg(); }
   if (ev.key === "ArrowRight") { lightboxIndex = (lightboxIndex + 1) % lightboxPhotos.length; updateLightboxImg(); }
 });
+// Touch swipe navigation for lightbox (mobile)
+(function() {
+  var startX = 0, startY = 0;
+  var overlay = null;
+  document.addEventListener("touchstart", function(ev) {
+    overlay = document.getElementById("lightboxOverlay");
+    if (!overlay || !overlay.classList.contains("open")) return;
+    startX = ev.touches[0].clientX;
+    startY = ev.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener("touchend", function(ev) {
+    if (!overlay || !overlay.classList.contains("open")) return;
+    if (lightboxPhotos.length < 2) return;
+    var dx = ev.changedTouches[0].clientX - startX;
+    var dy = ev.changedTouches[0].clientY - startY;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) { lightboxIndex = (lightboxIndex + 1) % lightboxPhotos.length; }
+      else { lightboxIndex = (lightboxIndex - 1 + lightboxPhotos.length) % lightboxPhotos.length; }
+      updateLightboxImg();
+    }
+  }, { passive: true });
+})();
 
 function showLoading(msg) {
   document.getElementById("loadingText").textContent = msg;
@@ -789,7 +818,7 @@ function renderRates() {
   let html = Object.entries(rates).filter(function(kv) { return kv[0] !== "defaultRate"; }).map(function(kv) {
     const name = kv[0], val = kv[1];
     return '<div class="rate-item">'
-      + '<span class="rate-name">' + name + '</span>'
+      + '<span class="rate-name">' + esc(name) + '</span>'
       + '<div class="rate-input-wrap">'
       + '<input class="rate-input" type="number" value="' + val + '" min="0" step="1" onchange="updateRate(\'' + name + '\',this.value)">'
       + '<span class="rate-currency">' + CURRENCY + '</span>'
@@ -856,7 +885,6 @@ function renderTable() {
     const dayLbl  = e.day === 1 ? t.fullBadge : t.halfBadge;
     const dayClass = e.day === 1 ? "day-full" : "day-half";
     const earned   = rate * (e.day || 1);
-    const rateInfo = t.perDay ? rate + ' ' + CURRENCY + t.perDay : rate + ' ' + CURRENCY;
     const details = isWork
       ? '<div class="detail-work">'
         + '<span class="day-badge ' + dayClass + '">' + dayLbl + '</span>'
@@ -893,11 +921,11 @@ function renderTable() {
     }
 
     return '<tr' + rowBg + '>'
-      + '<td data-label="' + colName   + '" class="td-name">' + e.name + '</td>'
+      + '<td data-label="' + colName   + '" class="td-name">' + esc(e.name) + '</td>'
       + '<td data-label="' + colDate   + '">' + fmtDate(e.date) + '</td>'
       + '<td data-label="' + colType   + '">' + typeBadge + '</td>'
       + '<td data-label="' + colDetail + '">' + details + '</td>'
-      + '<td data-label="' + colNotes  + '" class="td-note"><span class="note-text">' + (e.notes || "—") + '</span></td>'
+      + '<td data-label="' + colNotes  + '" class="td-note"><span class="note-text">' + esc(e.notes || "—") + '</span></td>'
       + '<td data-label="' + colPhoto  + '" class="td-photo">' + photoCell + '</td>'
       + '<td data-label="' + colChg    + '" class="td-ts">' + fmtDateTime(e.updatedAt || e.createdAt) + '</td>'
       + (isAdmin ? '<td class="td-act"><div class="td-actions">' + editBtn + delBtn + '</div></td>' : '')
@@ -988,7 +1016,7 @@ window.renderMonthly = function() {
       Object.entries(data.workers).forEach(function(kv) {
         const n = kv[0], w = kv[1];
         workRows += '<div class="mc-row">'
-          + '<span class="mc-name">' + n + '</span>'
+          + '<span class="mc-name">' + esc(n) + '</span>'
           + '<span class="mc-amount">' + fmtAmt(w.wage) + '</span>'
           + '</div>';
       });
@@ -1001,7 +1029,7 @@ window.renderMonthly = function() {
       expRows += '<div class="mc-divider"></div>';
       data.expensesList.forEach(function(ex) {
         expRows += '<div class="mc-row">'
-          + '<span class="mc-name">' + ex.name + (ex.notes ? ' <span class="mc-note">(' + ex.notes + ')</span>' : '') + '</span>'
+          + '<span class="mc-name">' + esc(ex.name) + (ex.notes ? ' <span class="mc-note">(' + esc(ex.notes) + ')</span>' : '') + '</span>'
           + '<span class="mc-amount mc-expense-amt">' + fmtAmt(ex.amount) + '</span>'
           + '</div>';
       });
@@ -1135,7 +1163,7 @@ window.exportCSV = function() {
     const photoUrls = getEntryPhotos(e).map(function(p) { return p.url; }).join(" | ");
     lines.push([e.name, e.date, typeLbl, details, e.notes || "", photoUrls, fmtDateTime(e.updatedAt || e.createdAt)]);
   });
-  const csv  = lines.map(function(r) { return r.map(function(c) { return '"' + c + '"'; }).join(","); }).join("\n");
+  const csv  = lines.map(function(r) { return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(","); }).join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
   const a    = document.createElement("a");
   a.href     = URL.createObjectURL(blob);
@@ -1181,11 +1209,11 @@ window.exportPrint = function() {
       ? (lang==="ar"?"عمل":lang==="fr"?"Travail":"Arbeitstag")
       : (lang==="ar"?"مصاريف":lang==="fr"?"Dépense":"Ausgaben");
     return "<tr>"
-      + "<td>" + e.name + "</td>"
+      + "<td>" + esc(e.name) + "</td>"
       + "<td class=\"num\">" + fmtDate(e.date) + "</td>"
       + "<td>" + typeTxt + "</td>"
       + "<td>" + detailTxt + "</td>"
-      + "<td>" + (e.notes || "—") + "</td>"
+      + "<td>" + esc(e.notes || "—") + "</td>"
       + "</tr>";
   }).join("");
 
@@ -1496,7 +1524,7 @@ body.rtl .form-actions{justify-content:flex-start}
 .type-select-row{margin-bottom:18px}
 .type-select-row p{font-size:12px;font-weight:500;color:var(--text-mid);margin-bottom:10px}
 .type-btns{display:flex;gap:10px;flex-wrap:wrap}
-.type-btn{padding:11px 22px;border-radius:10px;border:2px solid var(--border);background:#fff;color:var(--text-mid);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .2s}
+.type-btn{padding:11px 22px;border-radius:10px;border:2px solid var(--border);background:#fff;color:var(--text-mid);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .2s;touch-action:manipulation}
 .type-btn:hover{border-color:var(--green-light);color:var(--green-deep)}
 .type-btn-active{border-color:var(--green-mid);background:var(--green-mist);color:var(--green-deep)}
 
@@ -1504,7 +1532,7 @@ body.rtl .form-actions{justify-content:flex-start}
 .filter-bar select,.filter-bar input{border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;font-family:inherit;background:#fff;color:var(--text-dark)}
 .filter-bar input{width:155px}
 
-.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;min-width:600px}
 thead th{background:var(--green-deep);color:rgba(255,255,255,.9);font-size:11px;font-weight:500;letter-spacing:.6px;text-transform:uppercase;padding:11px 14px;text-align:left;white-space:nowrap}
 body.rtl thead th{text-align:right;letter-spacing:0;text-transform:none}
@@ -1529,7 +1557,7 @@ td{padding:10px 14px;font-size:14px;vertical-align:middle}
 .btn-export{background:transparent;border:1px solid var(--border);color:var(--text-mid);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;transition:all .18s}
 .btn-export:hover{background:var(--green-mist);border-color:var(--green-light);color:var(--green-deep)}
 
-.btn{padding:9px 20px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;font-family:inherit;border:none;transition:all .18s}
+.btn{padding:9px 20px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;font-family:inherit;border:none;transition:all .18s;touch-action:manipulation}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn-primary{background:var(--green-mid);color:#fff}
 .btn-primary:hover:not(:disabled){background:var(--green-deep);transform:translateY(-1px)}
@@ -1566,19 +1594,19 @@ td{padding:10px 14px;font-size:14px;vertical-align:middle}
 .photo-preview-item{position:relative;display:inline-block}
 .photo-preview-item .photo-preview-img{width:68px;height:68px;object-fit:cover;border-radius:8px;border:2px solid var(--green-light);display:block}
 .photo-preview-item .photo-preview-new{border-color:var(--amber);border-style:dashed}
-.btn-photo-item-remove{position:absolute;top:-6px;right:-6px;background:var(--terracotta);color:#fff;border:2px solid #fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0;transition:background .18s}
+.btn-photo-item-remove{position:absolute;top:-6px;inset-inline-end:-6px;background:var(--terracotta);color:#fff;border:2px solid #fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0;transition:background .18s}
 .btn-photo-item-remove:hover{background:#963a1e}
 
 /* ── LIGHTBOX (MULTI) ─────────────────────────────── */
 .lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:10000;display:none;align-items:center;justify-content:center;padding:20px}
 .lightbox-overlay.open{display:flex}
 .lightbox-img{max-width:88vw;max-height:82vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);object-fit:contain}
-.lightbox-close{position:fixed;top:16px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:24px;width:44px;height:44px;border-radius:50%;cursor:pointer;z-index:10001;display:flex;align-items:center;justify-content:center;transition:background .2s}
+.lightbox-close{position:fixed;top:16px;inset-inline-end:16px;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:24px;width:44px;height:44px;border-radius:50%;cursor:pointer;z-index:10001;display:flex;align-items:center;justify-content:center;transition:background .2s}
 .lightbox-close:hover{background:rgba(255,255,255,.3)}
 .lightbox-nav{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:none;color:#fff;font-size:36px;width:50px;height:50px;border-radius:50%;cursor:pointer;z-index:10001;display:flex;align-items:center;justify-content:center;transition:background .2s}
 .lightbox-nav:hover{background:rgba(255,255,255,.3)}
-.lightbox-prev{left:16px}
-.lightbox-next{right:16px}
+.lightbox-prev{inset-inline-start:16px}
+.lightbox-next{inset-inline-end:16px}
 .lightbox-counter{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.8);font-size:14px;font-weight:500;background:rgba(0,0,0,.5);padding:6px 16px;border-radius:20px;z-index:10001}
 
 /* ── MONTHLY OVERVIEW NEW ─────────────────────────── */
@@ -1625,11 +1653,6 @@ body.rtl .mc-grand-total{font-family:'Noto Sans Arabic',sans-serif}
 .mc-unpaid .mc-pay-btn{background:var(--amber);color:#fff}
 .mc-unpaid .mc-pay-btn:hover{background:#a86010}
 .mc-pay-hint{font-size:12px;color:#9a3412;font-style:italic}
-
-/* keep old classes for safety */
-.month-card{background:var(--green-mist);border:1px solid var(--border);border-radius:10px;padding:14px}
-.month-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:var(--text-mid)}
-.month-row.total{border-top:1px solid var(--border);margin-top:5px;padding-top:7px;font-weight:500;color:var(--text-dark)}
 
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:999;padding:20px}
 .modal-overlay.open{display:flex}
@@ -1803,12 +1826,15 @@ body.rtl .ys-amt{text-align:left}
   td.td-note{
     font-size:13px;
     flex-direction:column;
-    align-items:flex-start;
+    align-items:stretch;
     gap:4px;
   }
   td.td-note::before{
     margin-inline-end:0;
     margin-bottom:2px;
+  }
+  body.rtl td.td-note::before{
+    text-align:right;
   }
   td.td-note .note-text{
     width:100%;
@@ -1885,10 +1911,10 @@ body.rtl .ys-amt{text-align:left}
   .btn-photo-capture,.btn-photo-gallery{width:100%;justify-content:center;padding:14px;font-size:15px;border-radius:12px}
   .photo-preview-grid{gap:8px;padding:10px}
   .photo-preview-item .photo-preview-img{width:60px;height:60px}
-  .lightbox-close{top:12px;right:12px;width:40px;height:40px;font-size:22px}
+  .lightbox-close{top:12px;inset-inline-end:12px;width:40px;height:40px;font-size:22px}
   .lightbox-nav{width:42px;height:42px;font-size:28px}
-  .lightbox-prev{left:8px}
-  .lightbox-next{right:8px}
+  .lightbox-prev{inset-inline-start:8px}
+  .lightbox-next{inset-inline-end:8px}
   .lightbox-counter{bottom:16px;font-size:13px}
 
   /* Export */
@@ -1933,7 +1959,6 @@ body.rtl .ys-amt{text-align:left}
 @media(min-width:769px){
   .bottom-nav{display:none!important}
   main{padding:24px 16px 60px}
-  .mobile-cards{display:none}
   thead{display:table-header-group}
   tbody tr{display:table-row;border:none;border-radius:0;box-shadow:none;margin:0;padding:0}
   td{display:table-cell;border-bottom:none;text-align:left;padding:10px 14px}
@@ -1953,23 +1978,6 @@ body.rtl .ys-amt{text-align:left}
   .form-actions .btn{width:auto}
 }
 
-/* ── Small phones (≤380px) ── */
-@media(max-width:380px){
-  .stats-grid{grid-template-columns:1fr 1fr}
-  .stat-value{font-size:18px}
-  .lang-btn{padding:4px 7px;font-size:10px}
-  .tab{font-size:12px;padding:12px 8px}
-}
-
-/* ── Desktop (≥769px): original layout ── */
-@media(min-width:769px){
-  .form-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
-  .type-btns{flex-direction:row}
-  .type-btn{width:auto}
-  .form-actions{flex-direction:row}
-  .form-actions .btn{width:auto}
-  main{padding:24px 16px 60px}
-}
 </style>
 </head>
 <body>
