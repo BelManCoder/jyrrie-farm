@@ -679,10 +679,6 @@ window.selectType = function(type) {
 async function saveEntry() {
   let name = document.getElementById("f_name").value;
   const date = document.getElementById("f_date").value;
-  if (name === "__other__") {
-    name = (document.getElementById("f_name_custom").value || "").trim();
-    if (!name) { toast(t.enterName); return; }
-  }
   if (!name || !date) { toast(t.fillFields); return; }
 
   let payload = { name: name, date: date, type: currentType, updatedAt: Date.now() };
@@ -766,27 +762,13 @@ async function deleteEntry(id) {
 window.saveEntry   = saveEntry;
 window.deleteEntry = deleteEntry;
 
-window.toggleCustomName = function() {
-  const sel = document.getElementById("f_name");
-  const inp = document.getElementById("f_name_custom");
-  if (!sel || !inp) return;
-  if (sel.value === "__other__") {
-    inp.style.display = "";
-    inp.placeholder = t.enterName;
-    inp.focus();
-  } else {
-    inp.style.display = "none";
-    inp.value = "";
-  }
-};
+window.toggleCustomName = function() {};
 
 window.clearForm = function() {
   ["f_name", "f_expenses", "f_notes_work", "f_notes_expense"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
-  const customInp = document.getElementById("f_name_custom");
-  if (customInp) { customInp.value = ""; customInp.style.display = "none"; }
   document.getElementById("f_date").value = today();
   const fd = document.getElementById("f_day");
   if (fd) fd.value = "1";
@@ -817,13 +799,15 @@ window.editEntry = function(id) {
   if (!e) return;
   editingId = id;
   const nameSelect = document.getElementById("f_name");
-  const customInp = document.getElementById("f_name_custom");
   if (rates[e.name] !== undefined) {
     nameSelect.value = e.name;
-    if (customInp) { customInp.style.display = "none"; customInp.value = ""; }
   } else {
-    nameSelect.value = "__other__";
-    if (customInp) { customInp.style.display = ""; customInp.value = e.name; }
+    // Name not in rates — add as temporary option so it can be selected
+    const opt = document.createElement("option");
+    opt.value = e.name;
+    opt.textContent = e.name;
+    nameSelect.appendChild(opt);
+    nameSelect.value = e.name;
   }
   document.getElementById("f_date").value = e.date;
   const type = e.type || (e.expenses > 0 ? "expense" : "work");
@@ -966,7 +950,6 @@ function populateNameSelect() {
   Object.keys(rates).filter(function(k) { return k !== "defaultRate"; }).forEach(function(n) {
     html += '<option value="' + n + '"' + (n === cur ? " selected" : "") + '>' + n + '</option>';
   });
-  html += '<option value="__other__">' + t.otherName + '</option>';
   sel.innerHTML = html;
 }
 
@@ -2251,8 +2234,7 @@ body.rtl .ys-amt{text-align:left}
         <div class="form-grid" style="margin-bottom:20px;">
           <div class="form-group">
             <label for="f_name">Name des Mitarbeiters *</label>
-            <select id="f_name" onchange="toggleCustomName()"><option value="">— auswählen —</option></select>
-            <input type="text" id="f_name_custom" placeholder="Name eingeben..." style="display:none;margin-top:8px;">
+            <select id="f_name"><option value="">— auswählen —</option></select>
           </div>
           <div class="form-group">
             <label for="f_date">Datum *</label>
