@@ -47,7 +47,7 @@ const T = {
     allTypes:"Alle Einträge", typeWork:"🌾 Arbeitstage", typeExpense:"🛒 Ausgaben",
     cols:["Mitarbeiter","Datum","Typ","Details","Bemerkungen","Bilder","Letzte Änderung","Aktionen"],
     noEntries:"Noch keine Einträge vorhanden.",
-    labelPhoto:"Bilder (optional)", photoBtn:"📷 Bild aufnehmen", photoGallery:"🖼 Aus Galerie", photoChange:"📷 Ändern", photoRemove:"✕ Entfernen",
+    labelPhoto:"Bilder (optional)", photoBtn:"Bild aufnehmen", photoGallery:"Aus Galerie", photoChange:"Ändern", photoRemove:"Entfernen",
     photoHint:"Kamera: einzelnes Bild · Galerie: mehrere auswählen",
     photoUploading:"Bilder werden hochgeladen...", photoNoPhoto:"Keine Bilder",
     exportLabel:"Exportieren:", btnCSV:"📄 CSV", btnPrint:"🖨 Drucken / PDF",
@@ -91,7 +91,7 @@ const T = {
     allTypes:"Toutes les entrées", typeWork:"🌾 Jours travaillés", typeExpense:"🛒 Dépenses",
     cols:["Employé","Date","Type","Détails","Remarques","Images","Dernière modif.","Actions"],
     noEntries:"Aucune entrée pour le moment.",
-    labelPhoto:"Images (optionnel)", photoBtn:"📷 Prendre une photo", photoGallery:"🖼 Depuis galerie", photoChange:"📷 Changer", photoRemove:"✕ Supprimer",
+    labelPhoto:"Images (optionnel)", photoBtn:"Prendre une photo", photoGallery:"Depuis galerie", photoChange:"Changer", photoRemove:"Supprimer",
     photoHint:"Caméra: une photo · Galerie: plusieurs",
     photoUploading:"Téléchargement en cours...", photoNoPhoto:"Aucune image",
     exportLabel:"Exporter:", btnCSV:"📄 CSV", btnPrint:"🖨 Imprimer / PDF",
@@ -125,7 +125,7 @@ const T = {
     yTitle:"Bilan annuel", yPaidTotal:"Total payé", yUnpaidTotal:"Total non payé", yMonth:"Mois", yTotal:"Total",
   },
   ar: {
-    title:"مزرعة جيري", subtitle:"إدارة الموظفين",
+    title:"مزرعة جيري", subtitle:"إدارة العُمَّال",
     adminLogin:"دخول المشرف", logout:"خروج", live:"مباشر",
     totalDays:"إجمالي أيام العمل", wageCost:"إجمالي الأجور",
     expenses:"إجمالي المصاريف", totalEntries:"إجمالي الإدخالات",
@@ -133,13 +133,13 @@ const T = {
     tabs:["📋 الإدخالات","+ إدخال جديد","📊 ملخص شهري"],
     filterName:"🔍 بحث بالاسم...", allMonths:"كل الأشهر",
     allTypes:"كل الإدخالات", typeWork:"🌾 أيام العمل", typeExpense:"🛒 المصاريف",
-    cols:["الموظف","التاريخ","النوع","التفاصيل","ملاحظات","صور","آخر تعديل","إجراءات"],
+    cols:["عامل","التاريخ","النوع","التفاصيل","ملاحظات","صور","آخر تعديل","إجراءات"],
     noEntries:"لا توجد إدخالات بعد.",
-    labelPhoto:"صور (اختياري)", photoBtn:"📷 التقاط صورة", photoGallery:"🖼 من المعرض", photoChange:"📷 تغيير", photoRemove:"✕ حذف",
+    labelPhoto:"صور (اختياري)", photoBtn:"التقاط صورة", photoGallery:"من المعرض", photoChange:"تغيير", photoRemove:"حذف",
     photoHint:"الكاميرا: صورة واحدة · المعرض: عدة صور",
     photoUploading:"جاري رفع الصور...", photoNoPhoto:"لا توجد صور",
     exportLabel:"تصدير:", btnCSV:"📄 CSV", btnPrint:"🖨 طباعة / PDF",
-    labelName:"اسم الموظف *", labelDate:"التاريخ *",
+    labelName:"اسم العامل *", labelDate:"التاريخ *",
     entryType:"نوع الإدخال *", btnWork:"🌾 عمل", btnExpense:"🛒 مصاريف / مشتريات",
     labelDay:"يوم العمل *", labelExp:"المبلغ (DH) *", labelDesc:"الوصف / ملاحظات",
     labelNotes:"ملاحظات", notesPlaceholder:"ملاحظات اختيارية...", descPlaceholder:"ماذا تم شراؤه؟",
@@ -158,7 +158,7 @@ const T = {
     toastLoggedOut:"تم تسجيل الخروج.", fillFields:"⚠ يرجى ملء جميع الحقول الإلزامية.",
     fillAmount:"⚠ يرجى إدخال المبلغ.",
     confirmDelete:"هل تريد حذف هذا الإدخال؟", confirmRate:"هل تريد حذف هذا الأجر؟",
-    enterName:"اسم الموظف:", noData:"لا توجد بيانات بعد.", perDay:"/يوم", dayUnit:"يوم",
+    enterName:"اسم العامل:", noData:"لا توجد بيانات بعد.", perDay:"/يوم", dayUnit:"يوم",
     accessPrompt:"🔒 أدخل رمز الوصول",
     accessBtn:"تأكيد الدخول →", accessError:"❌ رمز خاطئ. حاول مرة أخرى.",
     accessFooter:"للموظفين المصرح لهم فقط",
@@ -614,7 +614,10 @@ window.selectType = function(type) {
 async function saveEntry() {
   let name = document.getElementById("f_name").value;
   const date = document.getElementById("f_date").value;
-  if (name === "__other__") { name = prompt(t.enterName); if (!name) return; }
+  if (name === "__other__") {
+    name = (document.getElementById("f_name_custom").value || "").trim();
+    if (!name) { toast(t.enterName); return; }
+  }
   if (!name || !date) { toast(t.fillFields); return; }
 
   let payload = { name: name, date: date, type: currentType, updatedAt: Date.now() };
@@ -698,11 +701,27 @@ async function deleteEntry(id) {
 window.saveEntry   = saveEntry;
 window.deleteEntry = deleteEntry;
 
+window.toggleCustomName = function() {
+  const sel = document.getElementById("f_name");
+  const inp = document.getElementById("f_name_custom");
+  if (!sel || !inp) return;
+  if (sel.value === "__other__") {
+    inp.style.display = "";
+    inp.placeholder = t.enterName;
+    inp.focus();
+  } else {
+    inp.style.display = "none";
+    inp.value = "";
+  }
+};
+
 window.clearForm = function() {
   ["f_name", "f_expenses", "f_notes_work", "f_notes_expense"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
+  const customInp = document.getElementById("f_name_custom");
+  if (customInp) { customInp.value = ""; customInp.style.display = "none"; }
   document.getElementById("f_date").value = today();
   const fd = document.getElementById("f_day");
   if (fd) fd.value = "1";
@@ -732,7 +751,15 @@ window.editEntry = function(id) {
   const e = entries.find(x => x.id === id);
   if (!e) return;
   editingId = id;
-  document.getElementById("f_name").value = e.name;
+  const nameSelect = document.getElementById("f_name");
+  const customInp = document.getElementById("f_name_custom");
+  if (rates[e.name] !== undefined) {
+    nameSelect.value = e.name;
+    if (customInp) { customInp.style.display = "none"; customInp.value = ""; }
+  } else {
+    nameSelect.value = "__other__";
+    if (customInp) { customInp.style.display = ""; customInp.value = e.name; }
+  }
   document.getElementById("f_date").value = e.date;
   const type = e.type || (e.expenses > 0 ? "expense" : "work");
   currentType = type;
@@ -1301,7 +1328,7 @@ window.exportPrint = function() {
       <span class="farm-icon">🌿</span>
       <div>
         <div class="farm-name">Jyrrie Farm</div>
-        <div class="farm-sub">${lang==="ar"?"إدارة الموظفين":lang==="fr"?"Gestion des employés":"Mitarbeiterverwaltung"}</div>
+        <div class="farm-sub">${lang==="ar"?"إدارة العُمَّال":lang==="fr"?"Gestion des employés":"Mitarbeiterverwaltung"}</div>
       </div>
     </div>
     <div class="print-meta">
@@ -2081,7 +2108,8 @@ body.rtl .ys-amt{text-align:left}
         <div class="form-grid" style="margin-bottom:20px;">
           <div class="form-group">
             <label for="f_name">Name des Mitarbeiters *</label>
-            <select id="f_name"><option value="">— auswählen —</option></select>
+            <select id="f_name" onchange="toggleCustomName()"><option value="">— auswählen —</option></select>
+            <input type="text" id="f_name_custom" placeholder="Name eingeben..." style="display:none;margin-top:8px;">
           </div>
           <div class="form-group">
             <label for="f_date">Datum *</label>
