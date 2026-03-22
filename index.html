@@ -23,9 +23,13 @@ const firebaseConfig = {
   measurementId:     "G-K7GRNJBNTK"
 };
 
-const ACCESS_CODE = "9999";   // ← Zugangscode für alle Mitarbeiter
-const ADMIN_PIN   = "1234";   // ← Admin-PIN nur für dich
-const CURRENCY    = "DH";
+const DEFAULT_ACCESS_CODE = "9999";
+const DEFAULT_ADMIN_PIN   = "1234";
+const MASTER_RESET_CODE   = "0909";   // ← Hardcoded Master-Reset-Code
+
+let ACCESS_CODE = DEFAULT_ACCESS_CODE;
+let ADMIN_PIN   = DEFAULT_ADMIN_PIN;
+const CURRENCY  = "DH";
 
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
@@ -33,6 +37,7 @@ const storage = getStorage(app);
 const entriesRef   = collection(db, "entries");
 const ratesRef     = doc(db, "config", "rates");
 const paymentsRef  = doc(db, "config", "payments");
+const passwordsRef = doc(db, "config", "passwords");
 
 // ── ÜBERSETZUNGEN ─────────────────────────────────────────────
 const T = {
@@ -61,7 +66,7 @@ const T = {
     newNamePh:"Neuer Mitarbeitername...", newRatePh:"Tagessatz DH",
     addBtn:"+ Hinzufügen", standard:"Standard (alle anderen)",
     pinTitle:"🔒 Admin-Login", pinDesc:"Gib die Admin-PIN ein.",
-    pinError:"Falsche PIN.", pinHint:"Standard-PIN: 1234",
+    pinError:"Falsche PIN.",
     fullBadge:"1 Tag", halfBadge:"½ Tag", fullDay:"Voller Tag", halfDay:"Halber Tag",
     loading:"Verbinde mit Datenbank...",
     toastSaved:"✓ Eintrag gespeichert.", toastUpdated:"✓ Aktualisiert.",
@@ -79,6 +84,15 @@ const T = {
     mPayNow:"Bitte zeitnah zahlen", mMarkPaid:"Als bezahlt markieren",
     mMarkUnpaid:"Als nicht bezahlt markieren",
     yTitle:"Jahresübersicht", yPaidTotal:"Bezahlt gesamt", yUnpaidTotal:"Nicht bezahlt gesamt", yMonth:"Mon.", yTotal:"Gesamt",
+    pwManage:"Passwörter verwalten", pwChangeAccess:"Zugangscode ändern",
+    pwChangePin:"Admin-PIN ändern", pwNewCode:"Neuer Code",
+    pwCurrentPin:"Aktuelle PIN", pwNewPin:"Neue PIN",
+    pwChange:"Ändern", pwReset:"Zurücksetzen",
+    pwMasterDesc:"Master-Reset: Beide Passwörter auf Standard zurücksetzen",
+    pwMasterCode:"Master-Code", pwChanged:"✓ Passwort geändert.",
+    pwResetDone:"✓ Passwörter auf Standard zurückgesetzt.",
+    pwWrongPin:"Aktuelle PIN ist falsch.", pwWrongMaster:"Falscher Master-Code.",
+    pwForgot:"Passwort vergessen?", pwMinLength:"Mind. 4 Zeichen erforderlich.",
   },
   fr: {
     title:"Jyrrie Farm", subtitle:"Gestion des employés",
@@ -105,7 +119,7 @@ const T = {
     newNamePh:"Nouveau nom d'employé...", newRatePh:"Taux DH",
     addBtn:"+ Ajouter", standard:"Standard (tous les autres)",
     pinTitle:"🔒 Connexion Admin", pinDesc:"Entrez le code PIN admin.",
-    pinError:"PIN incorrect.", pinHint:"PIN par défaut: 1234",
+    pinError:"PIN incorrect.",
     fullBadge:"1 Jour", halfBadge:"½ Jour", fullDay:"Journée complète", halfDay:"Demi-journée",
     loading:"Connexion à la base de données...",
     toastSaved:"✓ Entrée enregistrée.", toastUpdated:"✓ Mise à jour effectuée.",
@@ -123,6 +137,15 @@ const T = {
     mPayNow:"Paiement à prévoir", mMarkPaid:"Marquer comme payé",
     mMarkUnpaid:"Marquer non payé",
     yTitle:"Bilan annuel", yPaidTotal:"Total payé", yUnpaidTotal:"Total non payé", yMonth:"Mois", yTotal:"Total",
+    pwManage:"Gérer les mots de passe", pwChangeAccess:"Changer le code d'accès",
+    pwChangePin:"Changer le PIN Admin", pwNewCode:"Nouveau code",
+    pwCurrentPin:"PIN actuel", pwNewPin:"Nouveau PIN",
+    pwChange:"Changer", pwReset:"Réinitialiser",
+    pwMasterDesc:"Master-Reset : Réinitialiser les deux mots de passe par défaut",
+    pwMasterCode:"Code Master", pwChanged:"✓ Mot de passe modifié.",
+    pwResetDone:"✓ Mots de passe réinitialisés.",
+    pwWrongPin:"PIN actuel incorrect.", pwWrongMaster:"Code Master incorrect.",
+    pwForgot:"Mot de passe oublié ?", pwMinLength:"Min. 4 caractères requis.",
   },
   ar: {
     title:"مزرعة جيري", subtitle:"إدارة العُمَّال",
@@ -149,7 +172,7 @@ const T = {
     newNamePh:"اسم موظف جديد...", newRatePh:"الأجر DH",
     addBtn:"+ إضافة", standard:"القياسي (الآخرون)",
     pinTitle:"🔒 دخول المشرف", pinDesc:"أدخل رمز PIN للمشرف.",
-    pinError:"رمز PIN خاطئ.", pinHint:"PIN الافتراضي: 1234",
+    pinError:"رمز PIN خاطئ.",
     fullBadge:"يوم كامل", halfBadge:"نصف يوم", fullDay:"يوم كامل", halfDay:"نصف يوم",
     loading:"جارٍ الاتصال بقاعدة البيانات...",
     toastSaved:"✓ تم حفظ الإدخال.", toastUpdated:"✓ تم التحديث.",
@@ -167,6 +190,15 @@ const T = {
     mPayNow:"يرجى الدفع قريباً", mMarkPaid:"تحديد كمدفوع",
     mMarkUnpaid:"تحديد كغير مدفوع",
     yTitle:"ملخص سنوي", yPaidTotal:"المدفوع إجمالاً", yUnpaidTotal:"غير المدفوع إجمالاً", yMonth:"شهر", yTotal:"المجموع",
+    pwManage:"إدارة كلمات المرور", pwChangeAccess:"تغيير رمز الوصول",
+    pwChangePin:"تغيير رمز المشرف", pwNewCode:"رمز جديد",
+    pwCurrentPin:"الرمز الحالي", pwNewPin:"رمز جديد",
+    pwChange:"تغيير", pwReset:"إعادة تعيين",
+    pwMasterDesc:"إعادة تعيين رئيسية: إعادة كلمتي المرور إلى الافتراضي",
+    pwMasterCode:"رمز الماستر", pwChanged:"✓ تم تغيير كلمة المرور.",
+    pwResetDone:"✓ تمت إعادة تعيين كلمات المرور.",
+    pwWrongPin:"الرمز الحالي خاطئ.", pwWrongMaster:"رمز الماستر خاطئ.",
+    pwForgot:"نسيت كلمة المرور؟", pwMinLength:"٤ أحرف على الأقل.",
   }
 };
 
@@ -234,7 +266,26 @@ function updateAllText() {
   s("adminTitle", t.adminTitle); s("exportLabel", t.exportLabel);
   s("btnCSV", t.btnCSV);         s("btnPrint", t.btnPrint);
   s("modalTitle", t.pinTitle);   s("modalDesc", t.pinDesc);
-  s("pinError", t.pinError);     s("pinHint", t.pinHint);
+  s("pinError", t.pinError);
+  // Password management labels
+  s("pwManageTitle", t.pwManage);
+  s("lblPwAccess", t.pwChangeAccess);
+  s("lblPwPin", t.pwChangePin);
+  s("lblPwMasterDesc", t.pwMasterDesc);
+  s("btnPwAccess", t.pwChange);
+  s("btnPwPin", t.pwChange);
+  s("btnPwReset", t.pwReset);
+  s("accessForgotLink", t.pwForgot);
+  s("pinForgotLink", t.pwForgot);
+  // Password input placeholders
+  var nai = document.getElementById("newAccessCodeInput");
+  if (nai) nai.placeholder = t.pwNewCode;
+  var cpi = document.getElementById("currentPinInput");
+  if (cpi) cpi.placeholder = t.pwCurrentPin;
+  var npi = document.getElementById("newPinInput");
+  if (npi) npi.placeholder = t.pwNewPin;
+  var mri = document.getElementById("masterResetInput");
+  if (mri) mri.placeholder = t.pwMasterCode;
   s("btnCancel", t.cancel);      s("btnModalCancel", t.cancel);
   s("btnModalLogin", t.adminLogin);
   s("btnAddRate", t.addBtn);
@@ -559,6 +610,20 @@ function showLoading(msg) {
 function hideLoading() { document.getElementById("loadingOverlay").style.display = "none"; }
 
 // ── FIREBASE ─────────────────────────────────────────────────
+async function loadPasswords() {
+  try {
+    const snap = await getDoc(passwordsRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      ACCESS_CODE = data.accessCode || DEFAULT_ACCESS_CODE;
+      ADMIN_PIN   = data.adminPin   || DEFAULT_ADMIN_PIN;
+    }
+  } catch(e) { console.warn("loadPasswords:", e); }
+}
+async function savePasswords() {
+  await setDoc(passwordsRef, { accessCode: ACCESS_CODE, adminPin: ADMIN_PIN });
+}
+
 async function loadRates() {
   try {
     const snap = await getDoc(ratesRef);
@@ -838,6 +903,44 @@ window.addRate = async function() {
   document.getElementById("newRateValue").value = "";
   renderRates(); populateNameSelect(); toast(t.toastAdded);
   try { await saveRates(); } catch(e) { console.error(e); toast("⚠ " + e.message); }
+};
+
+// ── PASSWORD MANAGEMENT ──────────────────────────────────────
+window.changeAccessCode = async function() {
+  const newCode = document.getElementById("newAccessCodeInput").value.trim();
+  if (!newCode || newCode.length < 4) { toast(t.pwMinLength); return; }
+  ACCESS_CODE = newCode;
+  try { await savePasswords(); toast(t.pwChanged); } catch(e) { toast("⚠ " + e.message); }
+  document.getElementById("newAccessCodeInput").value = "";
+};
+
+window.changeAdminPin = async function() {
+  const currentPin = document.getElementById("currentPinInput").value.trim();
+  const newPin     = document.getElementById("newPinInput").value.trim();
+  if (currentPin !== ADMIN_PIN) { toast(t.pwWrongPin); return; }
+  if (!newPin || newPin.length < 4) { toast(t.pwMinLength); return; }
+  ADMIN_PIN = newPin;
+  try { await savePasswords(); toast(t.pwChanged); } catch(e) { toast("⚠ " + e.message); }
+  document.getElementById("currentPinInput").value = "";
+  document.getElementById("newPinInput").value = "";
+};
+
+window.masterReset = async function() {
+  const code = document.getElementById("masterResetInput").value.trim();
+  if (code !== MASTER_RESET_CODE) { toast(t.pwWrongMaster); return; }
+  ACCESS_CODE = DEFAULT_ACCESS_CODE;
+  ADMIN_PIN   = DEFAULT_ADMIN_PIN;
+  try { await savePasswords(); toast(t.pwResetDone); } catch(e) { toast("⚠ " + e.message); }
+  document.getElementById("masterResetInput").value = "";
+};
+
+window.showMasterResetPrompt = async function() {
+  const code = prompt(t.pwMasterCode + ":");
+  if (!code) return;
+  if (code.trim() !== MASTER_RESET_CODE) { toast(t.pwWrongMaster); return; }
+  ACCESS_CODE = DEFAULT_ACCESS_CODE;
+  ADMIN_PIN   = DEFAULT_ADMIN_PIN;
+  try { await savePasswords(); toast(t.pwResetDone); } catch(e) { toast("⚠ " + e.message); }
 };
 
 function renderRates() {
@@ -1420,11 +1523,11 @@ window.showTab = function(name) {
 };
 
 // ── ACCESS CODE ───────────────────────────────────────────────
-function isAccessGranted() { return sessionStorage.getItem("jyrrie_access") === ACCESS_CODE; }
+function isAccessGranted() { return sessionStorage.getItem("jyrrie_access") === "granted"; }
 window.checkAccess = function() {
   const input = document.getElementById("accessInput").value.trim();
   if (input === ACCESS_CODE) {
-    sessionStorage.setItem("jyrrie_access", ACCESS_CODE);
+    sessionStorage.setItem("jyrrie_access", "granted");
     document.getElementById("accessScreen").style.display = "none";
     initApp();
   } else {
@@ -1452,7 +1555,8 @@ async function initApp() {
   if (pinEl) pinEl.addEventListener("keydown", function(e) { if (e.key === "Enter") window.checkPin(); });
 }
 
-window.addEventListener("DOMContentLoaded", function() {
+window.addEventListener("DOMContentLoaded", async function() {
+  await loadPasswords();
   if (isAccessGranted()) {
     document.getElementById("accessScreen").style.display = "none";
     initApp();
@@ -2018,8 +2122,8 @@ body.rtl .ys-amt{text-align:left}
   </div>
   <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:32px 28px;max-width:340px;width:100%;">
     <p id="accessPromptText" style="color:rgba(255,255,255,0.8);font-size:14px;text-align:center;margin-bottom:20px;">🔒 Bitte Zugangscode eingeben</p>
-    <input id="accessInput" type="password" placeholder="• • • •" maxlength="8"
-      style="width:100%;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:10px;padding:14px;font-size:22px;color:#fff;text-align:center;letter-spacing:8px;font-family:inherit;outline:none;margin-bottom:12px;">
+    <input id="accessInput" type="password" placeholder="• • • •" maxlength="20"
+      style="width:100%;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:10px;padding:14px;font-size:18px;color:#fff;text-align:center;letter-spacing:3px;font-family:inherit;outline:none;margin-bottom:12px;">
     <p id="accessError" style="display:none;color:#fca5a5;font-size:13px;text-align:center;margin-bottom:12px;">❌ Falscher Code.</p>
     <button id="accessBtnText" onclick="checkAccess()"
       style="width:100%;background:var(--green-light);border:none;border-radius:10px;padding:13px;color:#fff;font-size:15px;font-weight:500;cursor:pointer;font-family:inherit;">
@@ -2027,6 +2131,8 @@ body.rtl .ys-amt{text-align:left}
     </button>
   </div>
   <p id="accessFooterText" style="color:rgba(255,255,255,0.25);font-size:11px;margin-top:24px;">Nur für autorisierte Mitarbeiter</p>
+  <p style="margin-top:12px;"><a href="#" id="accessForgotLink" onclick="showMasterResetPrompt(); return false;"
+    style="color:rgba(255,255,255,0.3);font-size:11px;text-decoration:underline;">Passwort vergessen?</a></p>
 </div>
 
 <div id="loadingOverlay">
@@ -2090,6 +2196,43 @@ body.rtl .ys-amt{text-align:left}
       <input type="number" id="newRateValue" placeholder="Tagessatz DH"
         style="border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:14px;background:#fffbf0;font-family:inherit;width:130px">
       <button id="btnAddRate" class="btn" style="background:var(--amber);color:#fff;padding:8px 16px" onclick="addRate()">+ Hinzufügen</button>
+    </div>
+
+    <!-- Passwörter verwalten -->
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f0c060;">
+      <h3 id="pwManageTitle" style="font-family:'Playfair Display',serif;font-size:15px;color:#7a4f10;margin-bottom:12px">🔑 Passwörter verwalten</h3>
+
+      <!-- Zugangscode ändern -->
+      <div style="margin-bottom:12px;">
+        <label id="lblPwAccess" style="font-size:14px;font-weight:500;display:block;margin-bottom:6px;">Zugangscode ändern</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="newAccessCodeInput" maxlength="20"
+            style="border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:14px;background:#fffbf0;font-family:inherit;width:180px;">
+          <button class="btn" style="background:var(--amber);color:#fff;padding:8px 16px" onclick="changeAccessCode()" id="btnPwAccess">Ändern</button>
+        </div>
+      </div>
+
+      <!-- Admin-PIN ändern -->
+      <div style="margin-bottom:12px;">
+        <label id="lblPwPin" style="font-size:14px;font-weight:500;display:block;margin-bottom:6px;">Admin-PIN ändern</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="password" id="currentPinInput" maxlength="20"
+            style="border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:14px;background:#fffbf0;font-family:inherit;width:140px;">
+          <input type="text" id="newPinInput" maxlength="20"
+            style="border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:14px;background:#fffbf0;font-family:inherit;width:140px;">
+          <button class="btn" style="background:var(--amber);color:#fff;padding:8px 16px" onclick="changeAdminPin()" id="btnPwPin">Ändern</button>
+        </div>
+      </div>
+
+      <!-- Master-Reset -->
+      <div style="padding-top:12px;border-top:1px dashed #f0c060;">
+        <p id="lblPwMasterDesc" style="font-size:13px;color:#999;margin-bottom:8px;">Master-Reset: Beide Passwörter auf Standard zurücksetzen</p>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="password" id="masterResetInput" maxlength="20"
+            style="border:1px solid var(--terracotta);border-radius:8px;padding:8px 12px;font-size:14px;background:#fff5f5;font-family:inherit;width:160px;">
+          <button class="btn" style="background:var(--terracotta);color:#fff;padding:8px 16px" onclick="masterReset()" id="btnPwReset">Zurücksetzen</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2236,13 +2379,16 @@ body.rtl .ys-amt{text-align:left}
   <div class="modal">
     <h2 id="modalTitle">🔒 Admin-Login</h2>
     <p id="modalDesc">Gib die Admin-PIN ein.</p>
-    <input type="password" id="pinInput" placeholder="• • • •" maxlength="6">
+    <input type="password" id="pinInput" placeholder="• • • •" maxlength="20">
     <p class="modal-error" id="pinError">Falsche PIN.</p>
     <div class="modal-actions">
       <button id="btnModalCancel" class="btn btn-secondary" onclick="closeModal()" style="flex:1">Abbrechen</button>
       <button id="btnModalLogin" class="btn btn-primary" onclick="checkPin()" style="flex:1">Einloggen</button>
     </div>
-    <p id="pinHint" style="font-size:12px;color:#aaa;margin-top:12px;text-align:center">Standard-PIN: 1234</p>
+    <p style="margin-top:10px;text-align:center;">
+      <a href="#" id="pinForgotLink" onclick="showMasterResetPrompt(); return false;"
+        style="color:#aaa;font-size:11px;text-decoration:underline;">Passwort vergessen?</a>
+    </p>
   </div>
 </div>
 
