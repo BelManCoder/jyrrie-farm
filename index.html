@@ -224,10 +224,21 @@ function detectLang() {
 
 function applyLang() {
   t = T[lang];
-  document.documentElement.lang = lang;
+  const fullLocale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
+  document.documentElement.lang = fullLocale;
   document.documentElement.dir  = lang === "ar" ? "rtl" : "ltr";
   lang === "ar" ? document.body.classList.add("rtl") : document.body.classList.remove("rtl");
   localStorage.setItem("jyrrie_lang", lang);
+  // Update date input locale so browser shows correct calendar
+  var dateInput = document.getElementById("f_date");
+  if (dateInput) {
+    dateInput.setAttribute("lang", fullLocale);
+    // Force browser to re-render date picker with new locale
+    var curVal = dateInput.value;
+    dateInput.type = "text";
+    dateInput.type = "date";
+    dateInput.value = curVal;
+  }
   updateAllText();
   renderTable();
   updateStats();
