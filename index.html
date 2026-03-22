@@ -356,8 +356,11 @@ function fmtAmt(v) {
   return Number(v).toFixed(0) + " " + CURRENCY;
 }
 function fmtDate(d) {
-  const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
-  return new Date(d + "T00:00:00").toLocaleDateString(locale, {day:"2-digit", month:"2-digit", year:"numeric"});
+  const dt = new Date(d + "T00:00:00");
+  const dd = String(dt.getDate()).padStart(2,"0");
+  const mm = String(dt.getMonth()+1).padStart(2,"0");
+  const yy = dt.getFullYear();
+  return dd + "." + mm + "." + yy;
 }
 function fmtMoney(v) {
   const n = Number(v);
@@ -367,9 +370,12 @@ function fmtMoneyInt(v) { return Number(v).toFixed(0) + " " + CURRENCY; }
 function fmtDateTime(ts) {
   if (!ts) return "—";
   const d = new Date(ts);
-  const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
-  return d.toLocaleDateString(locale, {day:"2-digit",month:"2-digit",year:"numeric"})
-    + " " + d.toLocaleTimeString(locale, {hour:"2-digit",minute:"2-digit"});
+  const dd = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const yy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2,"0");
+  const mi = String(d.getMinutes()).padStart(2,"0");
+  return dd + "." + mm + "." + yy + " " + hh + ":" + mi;
 }
 
 // ── PHOTO COMPRESS & UPLOAD (MULTI) ──────────────────────────
@@ -1339,9 +1345,14 @@ window.exportCSV = function() {
 window.exportPrint = function() {
   // Build a clean print-only table before printing
   const now    = new Date();
+  const _dd = String(now.getDate()).padStart(2,"0");
+  const _mm = String(now.getMonth()+1).padStart(2,"0");
+  const _yy = now.getFullYear();
+  const _hh = String(now.getHours()).padStart(2,"0");
+  const _mi = String(now.getMinutes()).padStart(2,"0");
+  const dateStr = _dd + "." + _mm + "." + _yy;
+  const timeStr = _hh + ":" + _mi;
   const locale = lang === "ar" ? "ar-MA" : lang === "fr" ? "fr-FR" : "de-DE";
-  const dateStr = now.toLocaleDateString(locale, {day:"2-digit",month:"2-digit",year:"numeric"});
-  const timeStr = now.toLocaleTimeString(locale, {hour:"2-digit",minute:"2-digit"});
 
   // Gather current filter state
   const fName  = (document.getElementById("filterName")?.value || "").toLowerCase();
@@ -1390,14 +1401,13 @@ window.exportPrint = function() {
       .toLocaleDateString(locale,{month:"long",year:"numeric"});
   }
 
-  // IMPORTANT: Always use ltr layout to prevent column reversal in Arabic
-  // Arabic text aligned right via CSS, but table structure stays ltr
-  const isAr = lang === "ar";
+  const isAr  = lang === "ar";
+  const dir   = isAr ? "rtl" : "ltr";
   const font  = isAr ? "'Noto Sans Arabic', sans-serif" : "'DM Sans', sans-serif";
   const txtal = isAr ? "right" : "left";
 
   const printHtml = `<!DOCTYPE html>
-<html lang="${lang}" dir="ltr">
+<html lang="${lang}" dir="${dir}">
 <head>
 <meta charset="UTF-8">
 <title>Jyrrie Farm — Export</title>
@@ -1414,7 +1424,7 @@ window.exportPrint = function() {
   .farm-icon { font-size: 28px; }
   .farm-name { font-size: 20pt; font-weight: 600; color: #1a3a2a; }
   .farm-sub  { font-size: 9pt; color: #7a8c75; margin-top: 2px; }
-  .print-meta { text-align: ${isAr?"left":"right"}; font-size: 9pt; color: #7a8c75; }
+  .print-meta { text-align: ${isAr?"left":"right"}; font-size: 9pt; color: #7a8c75; direction: ltr; unicode-bidi: embed; }
   .print-meta strong { color: #1a3a2a; }
 
   /* Stats bar */
@@ -1440,7 +1450,7 @@ window.exportPrint = function() {
   tbody tr:hover { background: #e8f0ea; }
   td { padding: 8px 12px; border-bottom: 1px solid #e8d8c0; vertical-align: top; text-align: ${txtal}; }
   td:first-child { font-weight: 500; }
-  td.num { direction: ltr; unicode-bidi: embed; text-align: ${isAr?"right":"left"}; }
+  td.num { direction: ltr; unicode-bidi: embed; }
   .type-work { color: #166534; }
   .type-expense { color: #b85c38; font-weight: 500; }
   .amt { direction: ltr; unicode-bidi: embed; display: inline-block; }
