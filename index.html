@@ -25,11 +25,18 @@ const firebaseConfig = {
 
 const DEFAULT_ACCESS_CODE = "9999";
 const DEFAULT_ADMIN_PIN   = "1234";
-const MASTER_RESET_CODE   = "0909";   // ← Hardcoded Master-Reset-Code
+const MASTER_RESET_HASH   = "9552e277ebcc7fa191292c6e900d94dfe6e837d8abf76a2da927d4530d2c8f69";
 
 let ACCESS_CODE = DEFAULT_ACCESS_CODE;
 let ADMIN_PIN   = DEFAULT_ADMIN_PIN;
 const CURRENCY  = "DH";
+
+// SHA-256 hash helper (Web Crypto API)
+async function sha256(text) {
+  const data = new TextEncoder().encode(text);
+  const buf  = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2,"0"); }).join("");
+}
 
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
@@ -391,42 +398,177 @@ function fmtDateTime(ts) {
 
 // ── DEFAULT LOGO GENERATOR ───────────────────────────────────
 function generateDefaultLogo() {
-  return new Promise(function(resolve) {
-    var s = 400;
-    var c = document.createElement("canvas");
-    c.width = s; c.height = s;
-    var ctx = c.getContext("2d");
+  return new Promise(function(resolve, reject) {
+    try {
+      var s = 600;
+      var cx = s / 2;
+      var c = document.createElement("canvas");
+      c.width = s; c.height = s;
+      var ctx = c.getContext("2d");
+      if (!ctx) { reject(new Error("Canvas not supported")); return; }
 
-    // Background gradient
-    var grad = ctx.createLinearGradient(0, 0, s, s);
-    grad.addColorStop(0, "#1a3a2a");
-    grad.addColorStop(1, "#2d5a3d");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, s, s);
+      // ── Rich background with radial depth ──
+      var bg = ctx.createRadialGradient(cx, cx, 40, cx, cx, s * 0.75);
+      bg.addColorStop(0, "#1e4230");
+      bg.addColorStop(1, "#0f2618");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, s, s);
 
-    // Decorative circle
-    ctx.beginPath();
-    ctx.arc(s / 2, s / 2 - 40, 90, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(74, 124, 89, 0.35)";
-    ctx.fill();
+      // Subtle diagonal texture lines
+      ctx.strokeStyle = "rgba(255,255,255,0.02)";
+      ctx.lineWidth = 1;
+      for (var i = -s; i < s * 2; i += 18) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + s, s); ctx.stroke();
+      }
 
-    // Leaf emoji
-    ctx.font = "90px serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("\u{1F33F}", s / 2, s / 2 - 40);
+      // ── Outer gold ring ──
+      ctx.beginPath();
+      ctx.arc(cx, cx, 260, 0, Math.PI * 2);
+      ctx.strokeStyle = "#c8a24e";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
 
-    // Farm name
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 38px sans-serif";
-    ctx.fillText("Jyrrie Farm", s / 2, s / 2 + 70);
+      // Inner gold ring
+      ctx.beginPath();
+      ctx.arc(cx, cx, 248, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(200,162,78,0.4)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
-    // Subtle border
-    ctx.strokeStyle = "rgba(255,255,255,0.15)";
-    ctx.lineWidth = 8;
-    ctx.strokeRect(12, 12, s - 24, s - 24);
+      // ── Central emblem circle ──
+      ctx.beginPath();
+      ctx.arc(cx, cx - 30, 95, 0, Math.PI * 2);
+      var emblemGrad = ctx.createRadialGradient(cx, cx - 30, 10, cx, cx - 30, 95);
+      emblemGrad.addColorStop(0, "rgba(200,162,78,0.15)");
+      emblemGrad.addColorStop(1, "rgba(200,162,78,0.03)");
+      ctx.fillStyle = emblemGrad;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(200,162,78,0.35)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
 
-    c.toBlob(function(blob) { resolve(blob); }, "image/jpeg", 0.9);
+      // ── Draw leaf motif with paths ──
+      ctx.save();
+      ctx.translate(cx, cx - 35);
+      // Left leaf
+      ctx.beginPath();
+      ctx.moveTo(0, 20);
+      ctx.bezierCurveTo(-15, 0, -50, -25, -35, -55);
+      ctx.bezierCurveTo(-20, -45, -5, -15, 0, 20);
+      ctx.fillStyle = "rgba(120,180,100,0.5)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(120,180,100,0.7)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Right leaf
+      ctx.beginPath();
+      ctx.moveTo(0, 20);
+      ctx.bezierCurveTo(15, 0, 50, -25, 35, -55);
+      ctx.bezierCurveTo(20, -45, 5, -15, 0, 20);
+      ctx.fillStyle = "rgba(100,170,90,0.5)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(120,180,100,0.7)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Center leaf (taller)
+      ctx.beginPath();
+      ctx.moveTo(0, 20);
+      ctx.bezierCurveTo(-8, -5, -20, -55, 0, -75);
+      ctx.bezierCurveTo(20, -55, 8, -5, 0, 20);
+      ctx.fillStyle = "rgba(80,160,80,0.55)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(120,180,100,0.7)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Stem
+      ctx.beginPath();
+      ctx.moveTo(0, 20);
+      ctx.lineTo(0, 50);
+      ctx.strokeStyle = "rgba(120,180,100,0.6)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+
+      // ── Typography: "JYRRIE" hero text ──
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "600 52px 'DM Sans', 'Helvetica Neue', sans-serif";
+      ctx.letterSpacing = "8px";
+      // Manual letter spacing for broad support
+      var heroText = "JYRRIE";
+      var heroY = cx + 80;
+      var spacing = 10;
+      ctx.font = "600 52px sans-serif";
+      var totalW = 0;
+      for (var j = 0; j < heroText.length; j++) totalW += ctx.measureText(heroText[j]).width + spacing;
+      totalW -= spacing;
+      var startX = cx - totalW / 2;
+      for (var j = 0; j < heroText.length; j++) {
+        var ch = heroText[j];
+        var chW = ctx.measureText(ch).width;
+        ctx.fillText(ch, startX + chW / 2, heroY);
+        startX += chW + spacing;
+      }
+
+      // ── "FARM" with wider spacing ──
+      ctx.font = "300 22px sans-serif";
+      ctx.fillStyle = "rgba(200,162,78,0.9)";
+      var farmText = "F  A  R  M";
+      ctx.fillText(farmText, cx, heroY + 40);
+
+      // ── Decorative divider lines ──
+      var divY = heroY + 62;
+      var lineW = 80;
+      // Left line
+      ctx.beginPath();
+      ctx.moveTo(cx - lineW - 20, divY);
+      ctx.lineTo(cx - 20, divY);
+      ctx.strokeStyle = "rgba(200,162,78,0.4)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Right line
+      ctx.beginPath();
+      ctx.moveTo(cx + 20, divY);
+      ctx.lineTo(cx + lineW + 20, divY);
+      ctx.stroke();
+      // Center diamond
+      ctx.beginPath();
+      ctx.moveTo(cx, divY - 4);
+      ctx.lineTo(cx + 4, divY);
+      ctx.lineTo(cx, divY + 4);
+      ctx.lineTo(cx - 4, divY);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(200,162,78,0.6)";
+      ctx.fill();
+
+      // ── Subtitle: "Domaine Agricole  ·  Belcaid" ──
+      ctx.font = "300 14px sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.fillText("Domaine Agricole  \u00b7  Belcaid", cx, divY + 24);
+
+      // ── Top arc text: "EST. MAROC" ──
+      ctx.save();
+      ctx.font = "400 11px sans-serif";
+      ctx.fillStyle = "rgba(200,162,78,0.5)";
+      var arcText = "\u2022  EST. MAROC  \u2022";
+      var arcR = 230;
+      var arcStart = -Math.PI / 2 - (arcText.length * 0.027);
+      for (var k = 0; k < arcText.length; k++) {
+        var angle = arcStart + k * 0.054;
+        ctx.save();
+        ctx.translate(cx + Math.cos(angle) * arcR, cx + Math.sin(angle) * arcR);
+        ctx.rotate(angle + Math.PI / 2);
+        ctx.fillText(arcText[k], 0, 0);
+        ctx.restore();
+      }
+      ctx.restore();
+
+      c.toBlob(function(blob) {
+        if (!blob) { reject(new Error("Logo generation failed")); return; }
+        resolve(blob);
+      }, "image/jpeg", 0.92);
+    } catch(e) { reject(e); }
   });
 }
 
@@ -868,6 +1010,8 @@ window.editEntry = function(id) {
   if (!e) return;
   editingId = id;
   const nameSelect = document.getElementById("f_name");
+  // Remove any previously added temporary options
+  nameSelect.querySelectorAll("option[data-temp]").forEach(function(o) { o.remove(); });
   if (rates[e.name] !== undefined) {
     nameSelect.value = e.name;
   } else {
@@ -875,6 +1019,7 @@ window.editEntry = function(id) {
     const opt = document.createElement("option");
     opt.value = e.name;
     opt.textContent = e.name;
+    opt.setAttribute("data-temp", "1");
     nameSelect.appendChild(opt);
     nameSelect.value = e.name;
   }
@@ -980,7 +1125,9 @@ window.changeAdminPin = async function() {
 
 window.masterReset = async function() {
   const code = document.getElementById("masterResetInput").value.trim();
-  if (code !== MASTER_RESET_CODE) { toast(t.pwWrongMaster); return; }
+  if (!code) return;
+  const hash = await sha256(code);
+  if (hash !== MASTER_RESET_HASH) { toast(t.pwWrongMaster); return; }
   ACCESS_CODE = DEFAULT_ACCESS_CODE;
   ADMIN_PIN   = DEFAULT_ADMIN_PIN;
   try { await savePasswords(); toast(t.pwResetDone); } catch(e) { toast("⚠ " + e.message); }
@@ -990,7 +1137,8 @@ window.masterReset = async function() {
 window.showMasterResetPrompt = async function() {
   const code = prompt(t.pwMasterCode + ":");
   if (!code) return;
-  if (code.trim() !== MASTER_RESET_CODE) { toast(t.pwWrongMaster); return; }
+  const hash = await sha256(code.trim());
+  if (hash !== MASTER_RESET_HASH) { toast(t.pwWrongMaster); return; }
   ACCESS_CODE = DEFAULT_ACCESS_CODE;
   ADMIN_PIN   = DEFAULT_ADMIN_PIN;
   try { await savePasswords(); toast(t.pwResetDone); } catch(e) { toast("⚠ " + e.message); }
@@ -1000,12 +1148,13 @@ function renderRates() {
   const grid = document.getElementById("ratesGrid");
   let html = Object.entries(rates).filter(function(kv) { return kv[0] !== "defaultRate"; }).map(function(kv) {
     const name = kv[0], val = kv[1];
+    const safeName = esc(name).replace(/'/g, "\\'");
     return '<div class="rate-item">'
       + '<span class="rate-name">' + esc(name) + '</span>'
       + '<div class="rate-input-wrap">'
-      + '<input class="rate-input" type="number" value="' + val + '" min="0" step="1" onchange="updateRate(\'' + name + '\',this.value)">'
+      + '<input class="rate-input" type="number" value="' + val + '" min="0" step="1" onchange="updateRate(\'' + safeName + '\',this.value)">'
       + '<span class="rate-currency">' + CURRENCY + '</span>'
-      + '<button onclick="deleteRate(\'' + name + '\')" class="rate-del">✕</button>'
+      + '<button onclick="deleteRate(\'' + safeName + '\')" class="rate-del">✕</button>'
       + '</div></div>';
   }).join("");
   grid.innerHTML = html;
@@ -1076,11 +1225,12 @@ function renderTable() {
         + '<span class="detail-exp-amt" dir="ltr">' + fmtMoney(e.expenses) + '</span>'
         + '</div>';
 
+    const safeId = esc(e.id).replace(/'/g, "\\'");
     const editBtn = isAdmin
-      ? '<button class="btn btn-edit" onclick="editEntry(\'' + e.id + '\')">✏</button>'
+      ? '<button class="btn btn-edit" onclick="editEntry(\'' + safeId + '\')">✏</button>'
       : "";
     const delBtn = isAdmin
-      ? '<button class="btn btn-danger" onclick="deleteEntry(\'' + e.id + '\')">🗑</button>'
+      ? '<button class="btn btn-danger" onclick="deleteEntry(\'' + safeId + '\')">🗑</button>'
       : "";
 
     const rowBg = idx % 2 === 0 ? '' : ' class="odd-row"';
@@ -1632,12 +1782,12 @@ window.showTab = function(name) {
 
 // ── ACCESS CODE ───────────────────────────────────────────────
 function isAccessGranted() { return sessionStorage.getItem("jyrrie_access") === "granted"; }
-window.checkAccess = function() {
+window.checkAccess = async function() {
   const input = document.getElementById("accessInput").value.trim();
   if (input === ACCESS_CODE) {
     sessionStorage.setItem("jyrrie_access", "granted");
     document.getElementById("accessScreen").style.display = "none";
-    initApp();
+    await initApp();
   } else {
     const err = document.getElementById("accessError");
     err.style.display = "block";
@@ -1667,7 +1817,7 @@ window.addEventListener("DOMContentLoaded", async function() {
   await loadPasswords();
   if (isAccessGranted()) {
     document.getElementById("accessScreen").style.display = "none";
-    initApp();
+    await initApp();
   } else {
     document.getElementById("accessScreen").style.display = "flex";
     document.getElementById("loadingOverlay").style.display = "none";
