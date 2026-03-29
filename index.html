@@ -389,6 +389,47 @@ function fmtDateTime(ts) {
   return dd + "." + mm + "." + yy + " " + hh + ":" + mi;
 }
 
+// ── DEFAULT LOGO GENERATOR ───────────────────────────────────
+function generateDefaultLogo() {
+  return new Promise(function(resolve) {
+    var s = 400;
+    var c = document.createElement("canvas");
+    c.width = s; c.height = s;
+    var ctx = c.getContext("2d");
+
+    // Background gradient
+    var grad = ctx.createLinearGradient(0, 0, s, s);
+    grad.addColorStop(0, "#1a3a2a");
+    grad.addColorStop(1, "#2d5a3d");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, s, s);
+
+    // Decorative circle
+    ctx.beginPath();
+    ctx.arc(s / 2, s / 2 - 40, 90, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(74, 124, 89, 0.35)";
+    ctx.fill();
+
+    // Leaf emoji
+    ctx.font = "90px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("\u{1F33F}", s / 2, s / 2 - 40);
+
+    // Farm name
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 38px sans-serif";
+    ctx.fillText("Jyrrie Farm", s / 2, s / 2 + 70);
+
+    // Subtle border
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 8;
+    ctx.strokeRect(12, 12, s - 24, s - 24);
+
+    c.toBlob(function(blob) { resolve(blob); }, "image/jpeg", 0.9);
+  });
+}
+
 // ── PHOTO COMPRESS & UPLOAD (MULTI) ──────────────────────────
 let pendingPhotoFiles = [];    // new files to upload
 let existingPhotos    = [];    // already saved photos [{url, path}]
@@ -733,6 +774,12 @@ async function saveEntry() {
           allPhotos.push(photo);
         }
       }
+      // If no photos remain, add default logo
+      if (!allPhotos.length) {
+        const logoBlob = await generateDefaultLogo();
+        const logoPhoto = await uploadPhoto(logoBlob, editingId);
+        allPhotos.push(logoPhoto);
+      }
       payload.photos = allPhotos;
       // Clean old single-photo fields
       payload.photoURL = null;
@@ -753,6 +800,11 @@ async function saveEntry() {
           uploaded.push(photo);
         }
         await updateDoc(doc(db, "entries", docRef.id), { photos: uploaded });
+      } else {
+        // No photos — upload default Jyrrie Farm logo
+        const logoBlob = await generateDefaultLogo();
+        const logoPhoto = await uploadPhoto(logoBlob, docRef.id);
+        await updateDoc(doc(db, "entries", docRef.id), { photos: [logoPhoto] });
       }
       toast(t.toastSaved);
     }
@@ -1118,8 +1170,8 @@ window.renderMonthly = function() {
 
     // Date range
     const sortedDates = data.dates.slice().sort();
-    const dateFrom    = new Date(sortedDates[0] + "T00:00:00").toLocaleDateString(locale, {day:"2-digit",month:"2-digit",year:"numeric"});
-    const dateTo      = new Date(sortedDates[sortedDates.length-1] + "T00:00:00").toLocaleDateString(locale, {day:"2-digit",month:"2-digit",year:"numeric"});
+    const dateFrom    = fmtDate(sortedDates[0]);
+    const dateTo      = fmtDate(sortedDates[sortedDates.length - 1]);
     const dateRange   = dateFrom === dateTo ? dateFrom : dateFrom + " – " + dateTo;
 
     // Totals
@@ -1181,7 +1233,7 @@ window.renderMonthly = function() {
     let payRow = '<div class="mc-payment ' + (isPaid ? 'mc-paid' : 'mc-unpaid') + '">'
       + '<div class="mc-payment-status">'
       + '<span class="mc-payment-dot ' + (isPaid ? 'dot-paid' : 'dot-unpaid') + '"></span>'
-      + '<span>' + (isPaid ? paidLbl + (pmt.paidDate ? ' · ' + paidOnLbl + ' ' + pmt.paidDate : '') : unpaidLbl) + '</span>'
+      + '<span>' + (isPaid ? paidLbl + (pmt.paidDate ? ' · ' + paidOnLbl + ' ' + fmtDate(pmt.paidDate) : '') : unpaidLbl) + '</span>'
       + '</div>'
       + (isAdmin
           ? '<button class="mc-pay-btn" onclick="togglePayment(\'' + m + '\')">' + payBtnLbl + '</button>'
@@ -1260,7 +1312,7 @@ function renderYearlySummary(months) {
             + y.paidList.map(function(m) {
                 return '<div class="ys-month-row">'
                   + '<span class="ys-month-name">' + m.label
-                  + (m.paidDate ? ' <span class="ys-paid-date">· ' + t.mPaidOn + ' ' + m.paidDate + '</span>' : '')
+                  + (m.paidDate ? ' <span class="ys-paid-date">· ' + t.mPaidOn + ' ' + fmtDate(m.paidDate) + '</span>' : '')
                   + '</span>'
                   + '<span class="ys-month-amt" dir="ltr">' + fmtAmt(m.amount) + '</span>'
                   + '</div>';
@@ -1852,7 +1904,6 @@ body.rtl .modal h2{font-family:'Noto Sans Arabic',sans-serif}
 .modal-actions{display:flex;gap:10px}
 .modal-error{color:var(--terracotta);font-size:13px;margin-top:-6px;margin-bottom:10px;display:none}
 
-/* ── YEARLY SUMMARY ───────────────────────────────── */
 /* ── YEARLY SUMMARY ───────────────────────────────── */
 .ys-wrapper{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden}
 .ys-title{background:var(--green-deep);color:#fff;font-family:'Playfair Display',serif;font-size:15px;font-weight:500;padding:13px 20px;letter-spacing:.3px}
