@@ -49,7 +49,7 @@ const passwordsRef = doc(db, "config", "passwords");
 // ── ÜBERSETZUNGEN ─────────────────────────────────────────────
 const T = {
   de: {
-    title:"Jyrrie Farm", subtitle:"Mitarbeiterverwaltung",
+    title:"Jyrrie Farm", subtitle:"Domaine Agricole · Belcaid",
     adminLogin:"Admin-Login", logout:"Abmelden", live:"Live",
     totalDays:"Gesamt Arbeitstage", wageCost:"Lohnkosten gesamt",
     expenses:"Ausgaben gesamt", totalEntries:"Einträge gesamt",
@@ -102,7 +102,7 @@ const T = {
     pwForgot:"Passwort vergessen?", pwMinLength:"Mind. 4 Zeichen erforderlich.",
   },
   fr: {
-    title:"Jyrrie Farm", subtitle:"Gestion des employés",
+    title:"Jyrrie Farm", subtitle:"Domaine Agricole · Belcaid",
     adminLogin:"Connexion Admin", logout:"Déconnexion", live:"En direct",
     totalDays:"Jours travaillés", wageCost:"Coût salarial total",
     expenses:"Dépenses totales", totalEntries:"Entrées totales",
@@ -155,7 +155,7 @@ const T = {
     pwForgot:"Mot de passe oublié ?", pwMinLength:"Min. 4 caractères requis.",
   },
   ar: {
-    title:"مزرعة جيري", subtitle:"إدارة العُمَّال",
+    title:"مزرعة جيري", subtitle:"المجال الفلاحي · بلقايد",
     adminLogin:"دخول المشرف", logout:"خروج", live:"مباشر",
     totalDays:"إجمالي أيام العمل", wageCost:"إجمالي الأجور",
     expenses:"إجمالي المصاريف", totalEntries:"إجمالي الإدخالات",
@@ -273,7 +273,7 @@ function updateAllText() {
   function p(id, v) { const el = document.getElementById(id); if (el) el.placeholder = v; }
   function lbl(f, v) { const el = document.querySelector("label[for='" + f + "']"); if (el) el.textContent = v; }
 
-  s("appTitle", t.title);        s("appSubtitle", t.subtitle);
+  s("appTitle", t.title);        s("appSubtitle", t.subtitle);  s("accessSubtitle", t.subtitle);
   s("liveLabel", t.live);
   s("adminToggleBtn", isAdmin ? t.logout : t.adminLogin);
   s("adminBadge", t.adminBadge);
@@ -1686,10 +1686,10 @@ window.exportPrint = function() {
 
   <div class="print-header">
     <div class="farm-logo">
-      <span class="farm-icon">🌿</span>
+      <span class="farm-icon"><svg viewBox="0 0 200 200" width="36" height="36" xmlns="http://www.w3.org/2000/svg"><circle cx="100" cy="100" r="96" fill="#1e4230" stroke="#c8a24e" stroke-width="4"/><g transform="translate(100,72)"><path d="M0,15 C-10,-5 -38,-25 -25,-48 C-12,-38 -3,-10 0,15Z" fill="rgba(100,175,90,0.6)"/><path d="M0,15 C10,-5 38,-25 25,-48 C12,-38 3,-10 0,15Z" fill="rgba(90,165,80,0.6)"/><path d="M0,15 C-6,-8 -15,-42 0,-58 C15,-42 6,-8 0,15Z" fill="rgba(70,155,70,0.65)"/><line x1="0" y1="15" x2="0" y2="30" stroke="rgba(120,190,100,0.5)" stroke-width="2.5"/></g><text x="100" y="130" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="600" font-size="26" letter-spacing="3">JF</text></svg></span>
       <div>
         <div class="farm-name">Jyrrie Farm</div>
-        <div class="farm-sub">${lang==="ar"?"إدارة العُمَّال":lang==="fr"?"Gestion des employés":"Mitarbeiterverwaltung"}</div>
+        <div class="farm-sub">${lang==="ar"?"المجال الفلاحي · بلقايد":lang==="fr"?"Domaine Agricole · Belcaid":"Domaine Agricole · Belcaid"}</div>
       </div>
     </div>
     <div class="print-meta">
@@ -2407,9 +2407,35 @@ body.rtl .ys-summary-total .ys-summary-amt{font-family:'Noto Sans Arabic',sans-s
 <!-- ZUGANGSCODE -->
 <div id="accessScreen" style="display:none;position:fixed;inset:0;background:var(--green-deep);z-index:10000;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
   <div style="text-align:center;margin-bottom:32px;">
-    <div style="font-size:52px;margin-bottom:12px;">🌿</div>
+    <div class="access-logo-wrap">
+      <svg viewBox="0 0 200 200" width="120" height="120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="alBg" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#1e4230"/><stop offset="100%" stop-color="#0f2618"/></radialGradient>
+          <linearGradient id="alGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#d4af5a"/><stop offset="100%" stop-color="#a8873a"/></linearGradient>
+        </defs>
+        <circle cx="100" cy="100" r="98" fill="url(#alBg)" stroke="url(#alGold)" stroke-width="2"/>
+        <circle cx="100" cy="100" r="88" fill="none" stroke="rgba(200,162,78,0.3)" stroke-width="0.8"/>
+        <!-- Leaves -->
+        <g transform="translate(100,72)">
+          <path d="M0,15 C-10,-5 -38,-25 -25,-48 C-12,-38 -3,-10 0,15Z" fill="rgba(100,175,90,0.55)" stroke="rgba(120,190,100,0.7)" stroke-width="0.8"/>
+          <path d="M0,15 C10,-5 38,-25 25,-48 C12,-38 3,-10 0,15Z" fill="rgba(90,165,80,0.55)" stroke="rgba(120,190,100,0.7)" stroke-width="0.8"/>
+          <path d="M0,15 C-6,-8 -15,-42 0,-58 C15,-42 6,-8 0,15Z" fill="rgba(70,155,70,0.6)" stroke="rgba(120,190,100,0.7)" stroke-width="0.8"/>
+          <line x1="0" y1="15" x2="0" y2="32" stroke="rgba(120,190,100,0.5)" stroke-width="1.5"/>
+        </g>
+        <!-- JYRRIE -->
+        <text x="100" y="126" text-anchor="middle" fill="#fff" font-family="'DM Sans',Helvetica,sans-serif" font-weight="600" font-size="22" letter-spacing="5">JYRRIE</text>
+        <!-- FARM -->
+        <text x="100" y="144" text-anchor="middle" fill="rgba(200,162,78,0.85)" font-family="'DM Sans',Helvetica,sans-serif" font-weight="300" font-size="11" letter-spacing="6">FARM</text>
+        <!-- Divider -->
+        <line x1="52" y1="152" x2="90" y2="152" stroke="rgba(200,162,78,0.35)" stroke-width="0.7"/>
+        <line x1="110" y1="152" x2="148" y2="152" stroke="rgba(200,162,78,0.35)" stroke-width="0.7"/>
+        <polygon points="100,149 103,152 100,155 97,152" fill="rgba(200,162,78,0.5)"/>
+        <!-- Subtitle -->
+        <text x="100" y="168" text-anchor="middle" fill="rgba(255,255,255,0.35)" font-family="'DM Sans',sans-serif" font-weight="300" font-size="7" letter-spacing="1.5">DOMAINE AGRICOLE  ·  BELCAID</text>
+      </svg>
+    </div>
     <h1 style="font-family:'Playfair Display',serif;color:#fff;font-size:26px;font-weight:700;margin-bottom:6px;">Jyrrie Farm</h1>
-    <p style="color:rgba(255,255,255,0.55);font-size:13px;letter-spacing:1px;text-transform:uppercase;">Mitarbeiterverwaltung</p>
+    <p id="accessSubtitle" style="color:rgba(255,255,255,0.55);font-size:13px;letter-spacing:1px;text-transform:uppercase;">Domaine Agricole · Belcaid</p>
   </div>
   <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:32px 28px;max-width:340px;width:100%;">
     <p id="accessPromptText" style="color:rgba(255,255,255,0.8);font-size:14px;text-align:center;margin-bottom:20px;">🔒 Bitte Zugangscode eingeben</p>
@@ -2434,10 +2460,21 @@ body.rtl .ys-summary-total .ys-summary-amt{font-family:'Noto Sans Arabic',sans-s
 <header>
   <div class="header-inner">
     <div class="logo" onclick="showTabMobile('entries')" style="cursor:pointer;" title="Zur Startseite">
-      <div class="logo-icon">🌿</div>
+      <div class="logo-icon">
+        <svg viewBox="0 0 200 200" width="34" height="34" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="100" cy="100" r="96" fill="#1e4230" stroke="#c8a24e" stroke-width="4"/>
+          <g transform="translate(100,72)">
+            <path d="M0,15 C-10,-5 -38,-25 -25,-48 C-12,-38 -3,-10 0,15Z" fill="rgba(100,175,90,0.6)"/>
+            <path d="M0,15 C10,-5 38,-25 25,-48 C12,-38 3,-10 0,15Z" fill="rgba(90,165,80,0.6)"/>
+            <path d="M0,15 C-6,-8 -15,-42 0,-58 C15,-42 6,-8 0,15Z" fill="rgba(70,155,70,0.65)"/>
+            <line x1="0" y1="15" x2="0" y2="30" stroke="rgba(120,190,100,0.5)" stroke-width="2.5"/>
+          </g>
+          <text x="100" y="130" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="600" font-size="26" letter-spacing="3">JF</text>
+        </svg>
+      </div>
       <div class="logo-text">
         <h1 id="appTitle">Jyrrie Farm</h1>
-        <p id="appSubtitle">Mitarbeiterverwaltung</p>
+        <p id="appSubtitle">Domaine Agricole · Belcaid</p>
       </div>
     </div>
     <div class="header-right">
