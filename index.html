@@ -57,7 +57,7 @@ const T = {
     tabs:["📋 Einträge","+ Neuer Eintrag","📊 Monatsübersicht"],
     filterName:"🔍 Name filtern...", allMonths:"Alle Monate",
     allTypes:"Alle Einträge", typeWork:"🌾 Arbeitstage", typeExpense:"🛒 Ausgaben",
-    cols:["Mitarbeiter","Datum","Typ","Details","Bemerkungen","Bilder","Letzte Änderung","Aktionen"],
+    cols:["Mitarbeiter","Datum","Typ","Details","Status","Bemerkungen","Bilder","Letzte Änderung","Aktionen"],
     noEntries:"Noch keine Einträge vorhanden.",
     labelPhoto:"Bilder (optional)", photoBtn:"Bild aufnehmen", photoGallery:"Aus Galerie", photoChange:"Ändern", photoRemove:"Entfernen",
     photoHint:"Kamera: einzelnes Bild · Galerie: mehrere auswählen",
@@ -110,7 +110,7 @@ const T = {
     tabs:["📋 Entrées","+ Nouvelle entrée","📊 Aperçu mensuel"],
     filterName:"🔍 Filtrer par nom...", allMonths:"Tous les mois",
     allTypes:"Toutes les entrées", typeWork:"🌾 Jours travaillés", typeExpense:"🛒 Dépenses",
-    cols:["Employé","Date","Type","Détails","Remarques","Images","Dernière modif.","Actions"],
+    cols:["Employé","Date","Type","Détails","Statut","Remarques","Images","Dernière modif.","Actions"],
     noEntries:"Aucune entrée pour le moment.",
     labelPhoto:"Images (optionnel)", photoBtn:"Prendre une photo", photoGallery:"Depuis galerie", photoChange:"Changer", photoRemove:"Supprimer",
     photoHint:"Caméra: une photo · Galerie: plusieurs",
@@ -163,7 +163,7 @@ const T = {
     tabs:["📋 الإدخالات","+ إدخال جديد","📊 ملخص شهري"],
     filterName:"🔍 بحث بالاسم...", allMonths:"كل الأشهر",
     allTypes:"كل الإدخالات", typeWork:"🌾 أيام العمل", typeExpense:"🛒 المصاريف",
-    cols:["عامل","التاريخ","النوع","التفاصيل","ملاحظات","صور","آخر تعديل","إجراءات"],
+    cols:["عامل","التاريخ","النوع","التفاصيل","الحالة","ملاحظات","صور","آخر تعديل","إجراءات"],
     noEntries:"لا توجد إدخالات بعد.",
     labelPhoto:"صور (اختياري)", photoBtn:"التقاط صورة", photoGallery:"من المعرض", photoChange:"تغيير", photoRemove:"حذف",
     photoHint:"الكاميرا: صورة واحدة · المعرض: عدة صور",
@@ -1189,7 +1189,7 @@ function renderTable() {
 
   const tbody = document.getElementById("tableBody");
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="' + (isAdmin ? 8 : 7) + '"><div class="empty-state"><div class="empty-icon">🌱</div><p>' + t.noEntries + '</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="' + (isAdmin ? 9 : 8) + '"><div class="empty-state"><div class="empty-icon">🌱</div><p>' + t.noEntries + '</p></div></td></tr>';
     return;
   }
 
@@ -1197,9 +1197,10 @@ function renderTable() {
   const colDate   = t.cols[1] || "Datum";
   const colType   = t.cols[2] || "Typ";
   const colDetail = t.cols[3] || "Details";
-  const colNotes  = t.cols[4] || "Bemerkungen";
-  const colPhoto  = t.cols[5] || "Bilder";
-  const colChg    = t.cols[6] || "Letzte Änderung";
+  const colStatus = t.cols[4] || "Status";
+  const colNotes  = t.cols[5] || "Bemerkungen";
+  const colPhoto  = t.cols[6] || "Bilder";
+  const colChg    = t.cols[7] || "Letzte Änderung";
 
   tbody.innerHTML = filtered.map(function(e, idx) {
     const type    = e.type || (e.expenses > 0 ? "expense" : "work");
@@ -1251,11 +1252,22 @@ function renderTable() {
       photoCell = '<span class="photo-none">' + t.photoNoPhoto + '</span>';
     }
 
+    // Payment status for this entry's month
+    const entryMonth = e.date.slice(0, 7);
+    const pmt = payments[entryMonth] || { paid: false };
+    const isPaid = pmt.paid;
+    const statusDotSm = '<span class="status-dot-sm ' + (isPaid ? 'dot-paid' : 'dot-unpaid') + '"></span>';
+    const statusBadge = isPaid
+      ? '<span class="status-badge status-paid"><span class="status-dot dot-paid"></span>'
+        + t.mPaid + (pmt.paidDate ? '<span class="status-date"> · ' + t.mPaidOn + ' ' + fmtDate(pmt.paidDate) + '</span>' : '') + '</span>'
+      : '<span class="status-badge status-unpaid"><span class="status-dot dot-unpaid"></span>' + t.mUnpaid + '</span>';
+
     return '<tr' + rowBg + '>'
-      + '<td data-label="' + colName   + '" class="td-name">' + esc(e.name) + '</td>'
+      + '<td data-label="' + colName   + '" class="td-name">' + statusDotSm + esc(e.name) + '</td>'
       + '<td data-label="' + colDate   + '">' + fmtDate(e.date) + '</td>'
       + '<td data-label="' + colType   + '">' + typeBadge + '</td>'
       + '<td data-label="' + colDetail + '">' + details + '</td>'
+      + '<td data-label="' + colStatus + '" class="td-status ' + (isPaid ? 'td-status-paid' : 'td-status-unpaid') + '">' + statusBadge + '</td>'
       + '<td data-label="' + colNotes  + '" class="td-note"><span class="note-text">' + esc(e.notes || "—") + '</span></td>'
       + '<td data-label="' + colPhoto  + '" class="td-photo">' + photoCell + '</td>'
       + '<td data-label="' + colChg    + '" class="td-ts">' + fmtDateTime(e.updatedAt || e.createdAt) + '</td>'
@@ -1550,14 +1562,17 @@ function populateMonthFilter() {
 
 // ── EXPORT ────────────────────────────────────────────────────
 window.exportCSV = function() {
-  const csvCols = [t.cols[0], t.cols[1], t.cols[2], t.cols[3], t.cols[4], t.cols[5], t.cols[6]];
+  const csvCols = [t.cols[0], t.cols[1], t.cols[2], t.cols[3], t.cols[4], t.cols[5], t.cols[6], t.cols[7]];
   const lines = [csvCols];
   entries.slice().sort(function(a,b) { return a.date.localeCompare(b.date); }).forEach(function(e) {
     const type    = e.type || (e.expenses > 0 ? "expense" : "work");
     const typeLbl = type === "work" ? t.btnWork.replace(/^\S+\s/,"") : t.btnExpense.replace(/^\S+\s/,"");
     const details = type === "work" ? (e.day + " " + t.dayUnit) : fmtAmt(e.expenses);
+    const em = e.date.slice(0, 7);
+    const pmtCsv = payments[em] || { paid: false };
+    const statusCsv = pmtCsv.paid ? t.mPaid + (pmtCsv.paidDate ? ' ' + t.mPaidOn + ' ' + fmtDate(pmtCsv.paidDate) : '') : t.mUnpaid;
     const photoUrls = getEntryPhotos(e).map(function(p) { return p.url; }).join(" | ");
-    lines.push([e.name, e.date, typeLbl, details, e.notes || "", photoUrls, fmtDateTime(e.updatedAt || e.createdAt)]);
+    lines.push([e.name, e.date, typeLbl, details, statusCsv, e.notes || "", photoUrls, fmtDateTime(e.updatedAt || e.createdAt)]);
   });
   const csv  = lines.map(function(r) { return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(","); }).join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -1609,11 +1624,17 @@ window.exportPrint = function() {
     const typeTxt = isWork
       ? (lang==="ar"?"عمل":lang==="fr"?"Travail":"Arbeitstag")
       : (lang==="ar"?"مصاريف":lang==="fr"?"Dépense":"Ausgaben");
+    const pm = e.date.slice(0, 7);
+    const pmtP = payments[pm] || { paid: false };
+    const stP = pmtP.paid
+      ? '<span style="color:#166534;font-weight:500">✓ ' + t.mPaid + '</span>'
+      : '<span style="color:#9a3412;font-weight:500">✗ ' + t.mUnpaid + '</span>';
     return "<tr>"
       + "<td>" + esc(e.name) + "</td>"
       + "<td class=\"num\">" + fmtDate(e.date) + "</td>"
       + "<td>" + typeTxt + "</td>"
       + "<td>" + detailTxt + "</td>"
+      + "<td>" + stP + "</td>"
       + "<td>" + esc(e.notes || "—") + "</td>"
       + "</tr>";
   }).join("");
@@ -1740,6 +1761,7 @@ window.exportPrint = function() {
         <th>${t.cols[2]}</th>
         <th>${t.cols[3]}</th>
         <th>${t.cols[4]}</th>
+        <th>${t.cols[5]}</th>
       </tr>
     </thead>
     <tbody>
@@ -1747,6 +1769,7 @@ window.exportPrint = function() {
       <tr class="totals-row">
         <td colspan="3">${lang==="ar"?"الإجمالي":lang==="fr"?"Total":"Gesamt"}</td>
         <td><span class="amt">${fmtAmt(totalWages + totalExp)}</span></td>
+        <td></td>
         <td><span class="amt">${totalDays.toFixed(1)} ${lang==="ar"?"يوم":lang==="fr"?"jour(s)":"Tag(e)"}</span></td>
       </tr>
     </tbody>
@@ -1949,6 +1972,16 @@ td{padding:10px 14px;font-size:14px;vertical-align:middle}
 .day-full{background:#dcfce7;color:#166534}
 .day-half{background:#fef9c3;color:#854d0e}
 .day-expense{background:#fff3cd;color:#856404}
+/* ── STATUS COLUMN ─────────────────────────────── */
+.td-status{white-space:nowrap;vertical-align:middle}
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500}
+.status-paid{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.status-unpaid{background:#fff8f0;color:#9a3412;border:1px solid #fed7aa}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.status-dot-sm{width:9px;height:9px;border-radius:50%;display:inline-block;vertical-align:middle;margin-inline-end:6px;flex-shrink:0}
+.status-dot-sm.dot-unpaid{animation:blink 1.8s ease-in-out infinite}
+.status-date{font-size:11px;opacity:.7;font-weight:400}
+
 .td-note{max-width:180px;white-space:pre-wrap;font-size:13px;color:var(--text-muted);word-break:break-word}
 .td-actions{display:flex;gap:6px;align-items:center}
 .empty-state{text-align:center;padding:45px 20px;color:var(--text-muted)}
@@ -2252,6 +2285,34 @@ body.rtl .ys-summary-total .ys-summary-amt{font-family:'Noto Sans Arabic',sans-s
     padding:11px 14px;
   }
   td.td-name::before{color:rgba(255,255,255,.6);text-transform:none;font-size:12px}
+  /* Status cell in card view */
+  td.td-status{
+    padding:0;
+    border-bottom:none;
+  }
+  td.td-status::before{display:none}
+  td.td-status-paid{
+    background:#f0fdf4;
+    border-bottom:2px solid #bbf7d0;
+  }
+  td.td-status-unpaid{
+    background:#fff8f0;
+    border-bottom:2px solid #fed7aa;
+  }
+  td.td-status .status-badge{
+    width:100%;
+    justify-content:center;
+    padding:10px 14px;
+    border-radius:0;
+    border:none;
+    font-size:13px;
+    font-weight:600;
+    gap:8px;
+  }
+  td.td-status .status-dot{width:10px;height:10px}
+  /* Name dot bigger on mobile */
+  td.td-name .status-dot-sm{width:10px;height:10px;margin-inline-end:8px}
+
   td.td-note{
     font-size:13px;
     flex-direction:column;
@@ -2402,6 +2463,7 @@ body.rtl .ys-summary-total .ys-summary-amt{font-family:'Noto Sans Arabic',sans-s
   td.td-name::before{display:none}
   td.td-act{background:transparent;border-radius:0;padding:10px 14px;justify-content:flex-start}
   td.td-act::before{display:none}
+  td.td-status{text-align:center;background:transparent;border-bottom:none}
   td.td-photo{text-align:center}
   .table-wrap{overflow-x:auto}
   table{min-width:600px}
@@ -2685,6 +2747,7 @@ body.rtl .ys-summary-total .ys-summary-amt{font-family:'Noto Sans Arabic',sans-s
               <th>Datum</th>
               <th>Typ</th>
               <th>Details</th>
+              <th id="thStatus">Status</th>
               <th>Bemerkungen</th>
               <th>Bilder</th>
               <th>Letzte Änderung</th>
@@ -2692,7 +2755,7 @@ body.rtl .ys-summary-total .ys-summary-amt{font-family:'Noto Sans Arabic',sans-s
             </tr>
           </thead>
           <tbody id="tableBody">
-            <tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🌱</div><p>Verbinde...</p></div></td></tr>
+            <tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🌱</div><p>Verbinde...</p></div></td></tr>
           </tbody>
         </table>
       </div>
