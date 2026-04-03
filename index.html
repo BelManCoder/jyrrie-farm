@@ -279,8 +279,7 @@ function updateAllText() {
   s("adminBadge", t.adminBadge);
   s("lblDays", t.totalDays);     s("lblWages", t.wageCost);
   s("lblExpenses", t.expenses);  s("lblEntries", t.totalEntries);
-  s("subDays", t.currentMonth);  s("subWages", t.currentMonth);
-  s("subExpenses", t.currentMonth); s("subEntries", t.allTime);
+  s("subEntries", t.allTime);
   s("adminTitle", t.adminTitle); s("exportLabel", t.exportLabel);
   s("btnCSV", t.btnCSV);         s("btnPrint", t.btnPrint);
   s("modalTitle", t.pinTitle);   s("modalDesc", t.pinDesc);
@@ -1269,10 +1268,23 @@ window.renderTable = renderTable;
 function updateStats() {
   const m   = new Date().toISOString().slice(0, 7);
   const cur = entries.filter(function(e) { return e.date.indexOf(m) === 0; });
-  document.getElementById("statDays").textContent     = cur.reduce(function(s, e) { return s + (e.day || 0); }, 0).toFixed(1);
-  document.getElementById("statWages").textContent    = fmtMoneyInt(cur.reduce(function(s, e) { return s + getRate(e.name) * (e.day || 0); }, 0));
-  document.getElementById("statExpenses").textContent = fmtMoneyInt(cur.reduce(function(s, e) { return s + (e.expenses || 0); }, 0));
+  const all = entries;
+  // Current month stats
+  var monthDays = cur.reduce(function(s, e) { return s + (e.day || 0); }, 0);
+  var monthWages = cur.reduce(function(s, e) { return s + getRate(e.name) * (e.day || 0); }, 0);
+  var monthExp = cur.reduce(function(s, e) { return s + (e.expenses || 0); }, 0);
+  // All-time stats
+  var totalDays = all.reduce(function(s, e) { return s + (e.day || 0); }, 0);
+  var totalWages = all.reduce(function(s, e) { return s + getRate(e.name) * (e.day || 0); }, 0);
+  var totalExp = all.reduce(function(s, e) { return s + (e.expenses || 0); }, 0);
+  document.getElementById("statDays").textContent     = totalDays.toFixed(1);
+  document.getElementById("statWages").textContent    = fmtMoneyInt(totalWages);
+  document.getElementById("statExpenses").textContent = fmtMoneyInt(totalExp);
   document.getElementById("statEntries").textContent  = entries.length;
+  // Show current month in sub-labels
+  document.getElementById("subDays").textContent  = t.currentMonth + ": " + monthDays.toFixed(1);
+  document.getElementById("subWages").textContent = t.currentMonth + ": " + fmtMoneyInt(monthWages);
+  document.getElementById("subExpenses").textContent = t.currentMonth + ": " + fmtMoneyInt(monthExp);
 }
 
 // ── MONTHLY ──────────────────────────────────────────────────
@@ -2495,17 +2507,17 @@ body.rtl .ys-summary-total .ys-summary-amt{font-family:'Noto Sans Arabic',sans-s
     <div class="stat-card">
       <div class="stat-label" id="lblDays">Gesamt Arbeitstage</div>
       <div class="stat-value" id="statDays" dir="ltr">—</div>
-      <div class="stat-sub" id="subDays">Aktueller Monat</div>
+      <div class="stat-sub" id="subDays">Alle Zeiten</div>
     </div>
     <div class="stat-card amber">
       <div class="stat-label" id="lblWages">Lohnkosten gesamt</div>
       <div class="stat-value" id="statWages" dir="ltr">—</div>
-      <div class="stat-sub" id="subWages">Aktueller Monat</div>
+      <div class="stat-sub" id="subWages">Alle Zeiten</div>
     </div>
     <div class="stat-card terra">
       <div class="stat-label" id="lblExpenses">Ausgaben gesamt</div>
       <div class="stat-value" id="statExpenses" dir="ltr">—</div>
-      <div class="stat-sub" id="subExpenses">Aktueller Monat</div>
+      <div class="stat-sub" id="subExpenses">Alle Zeiten</div>
     </div>
     <div class="stat-card">
       <div class="stat-label" id="lblEntries">Einträge gesamt</div>
